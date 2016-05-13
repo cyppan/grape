@@ -1,25 +1,26 @@
 (ns grappe.core-test
   (:require [clojure.test :refer :all]
             [grappe.core :refer :all]
-            [grappe.store :refer :all]
+            [grappe.store :as store]
             [schema.core :as s]
+            [grappe.hooks.core :refer [compose-hooks]]
             [grappe.hooks.auth-field :refer [hooks] :rename {hooks auth-field-hooks}]
-            [grappe.hooks.soft-delete :refer [hooks] :rename {hooks soft-delete-hooks}]
             [grappe.hooks.default-sort :refer [hooks] :rename {hooks default-sort-hooks}]
             [grappe.hooks.restricts-fields :refer [hooks] :rename {hooks restrict-fields-hooks}]
             [grappe.hooks.inject-pagination :refer [hooks] :rename {hooks inject-pagination-hooks}]
             [grappe.query :refer [validate-query]])
-  (:import (org.bson.types ObjectId)))
+  (:import (org.bson.types ObjectId)
+           (clojure.lang ExceptionInfo)))
 
-(def store
-  (->AtomDataSource
+(def store-inst
+  (store/->AtomDataSource
     (atom {"companies"   [{:_id (ObjectId. "caccccccccccccccccccccc1") :name "Pied Piper" :domain "www.piedpiper.com"}
                           {:_id (ObjectId. "caccccccccccccccccccccc2") :name "Raviga" :domain "c2.com"}]
            "permissions" [{:_id (ObjectId. "eeeeeeeeeeeeeeeeeeeeeee1") :company (ObjectId. "caccccccccccccccccccccc1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :roles ["ADMIN"]}
                           {:_id (ObjectId. "eeeeeeeeeeeeeeeeeeeeeee2") :company (ObjectId. "caccccccccccccccccccccc1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :roles ["USER"]}
                           {:_id (ObjectId. "eeeeeeeeeeeeeeeeeeeeeee3") :company (ObjectId. "caccccccccccccccccccccc2") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3") :roles ["ADMIN"]}]
-           "users"       [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :company (ObjectId. "caccccccccccccccccccccc1") :username "user 1" :email "user1@c1.com"}
-                          {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :company (ObjectId. "caccccccccccccccccccccc1") :username "user 2" :email "user2@c1.com"}
+           "users"       [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :company (ObjectId. "caccccccccccccccccccccc1") :username "user 1" :email "user1@c1.com" :password "secret"}
+                          {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :company (ObjectId. "caccccccccccccccccccccc1") :username "user 2" :email "user2@c1.com" :password "secret"}
                           {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3") :company (ObjectId. "caccccccccccccccccccccc2") :username "user 3" :email "user3@c2.com"}]
            "comments"    [{:_id (ObjectId. "ccccccccccccccccccccccc1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :company (ObjectId. "caccccccccccccccccccccc1") :text "this company is cool" :extra "extra field"}
                           {:_id (ObjectId. "ccccccccccccccccccccccc2") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :company (ObjectId. "caccccccccccccccccccccc1") :text "love you guys :D"}
@@ -51,7 +52,9 @@
    :schema           {:_id      ObjectId
                       :company  ObjectId
                       :username #"^[A-Za-z0-9_ ]{2,25}$"
-                      :email    s/Str}
+                      :email    s/Str
+                      :password s/Str}
+   :fields           #{:_id :company :username :email}
    :url              "users"
    :resource-methods #{:post :get}
    :item-methods     #{:get :put :patch :delete}
@@ -116,19 +119,15 @@
    :soft-delete             true})
 
 (def hooks
-  {:pre-fetch
-   (fn [deps resource request query]
-     (->> query
-          ((:pre-fetch auth-field-hooks) deps resource request)
-          ((:pre-fetch soft-delete-hooks) deps resource request)
-          ((:pre-fetch default-sort-hooks) deps resource request)
-          ((:pre-fetch restrict-fields-hooks) deps resource request)
-          ((:pre-fetch inject-pagination-hooks) deps resource request)))})
+  (compose-hooks auth-field-hooks
+                 default-sort-hooks
+                 restrict-fields-hooks
+                 inject-pagination-hooks))
 
 (def config {:default-paginate {:per-page 10}
              :default-sort     {:sort {:_created -1}}})
 
-(def deps {:store              store
+(def deps {:store              store-inst
            :resources-registry {:companies             CompaniesResource
                                 :users                 UsersResource
                                 :public-users          PublicUsersResource
@@ -138,17 +137,64 @@
            :hooks              hooks
            :config             config})
 
-(deftest a-test
-  (testing "fetch companies"
-    ;(let [request {:auth  {:auth_id "caccccccccccccccccccccc1"}
-    ;               :query {:find {}}}]
-    ;  (clojure.pprint/pprint (fetch-resource deps CompaniesResource request {})))
-    ;(let [request {:auth  {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
-    ;               :query {:find {}}}]
-    ;  (clojure.pprint/pprint (fetch-resource deps CommentsResource request {})))
+(deftest integration
+
+  (testing "badly formatted query should fail to validate"
+    (let [request {}
+          query {:toto "c'est l'histoire..."}]
+      (is (thrown? ExceptionInfo (validate-query deps CommentsResource request query)))))
+
+  (testing "query for companies should inject auth filter"
+    (let [request {:auth {:auth_id "caccccccccccccccccccccc1"}}
+          query (validate-query deps CompaniesResource request {:find {}})]
+      (is (= "caccccccccccccccccccccc1" (get-in query [:find :_id])))))
+
+  (testing "query for public comments should not inject auth filter"
     (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
-          query {:find {} :paginate {:per-page 2 :page 2} :opts {:count? true} :relations {:user {}}}
-          valid-query (validate-query deps CommentsResource request query)]
-      (clojure.pprint/pprint valid-query)
-      (clojure.pprint/pprint (fetch-item deps CommentsResource request valid-query)))
-    (is (= 0 1))))
+          query (validate-query deps CommentsResource request {:find {}})]
+      (is (nil? (get-in query [:find :_id])))))
+
+  (testing "fetching comments with disabled soft delete should return soft delete"
+    (let [query (validate-query deps CommentsResource {} {:find {} :opts {:count? true}})
+          fetched (store/fetch-resource deps (dissoc CommentsResource :soft-delete) {} query)]
+      (is (= 4 (count (:_documents fetched)) (:_count fetched)))))
+
+  (testing "fetching comments with enabled soft delete should not return soft delete"
+    (let [query (validate-query deps CommentsResource {} {:find {} :opts {:count? true}})
+          fetched (store/fetch-resource deps CommentsResource {} query)]
+      (is (= 3 (count (:_documents fetched)) (:_count fetched)))))
+
+  (testing "fetching comments with enabled soft delete but explicitely querying for them should return soft delete"
+    (let [query (validate-query deps CommentsResource {} {:find {:_deleted true} :opts {:count? true}})
+          fetched (store/fetch-resource deps CommentsResource {} query)]
+      (is (= 1 (count (:_documents fetched)) (:_count fetched)))))
+
+  (testing "fetching comments with pagination"
+    (let [query (validate-query deps CommentsResource {} {:find {} :paginate {:per-page 2} :opts {:count? true}})
+          fetched (store/fetch-resource deps CommentsResource {} query)]
+      (is (= 2 (count (:_documents fetched))))
+      (is (= 3 (:_count fetched))))
+    (let [query (validate-query deps CommentsResource {} {:find {} :paginate {:per-page 2 :page 2} :opts {:count? true}})
+          fetched (store/fetch-resource deps CommentsResource {} query)]
+      (is (= 1 (count (:_documents fetched))))
+      (is (= 3 (:_count fetched)))))
+
+  (testing "embedding users in comments"
+    (let [query (validate-query deps CommentsResource {} {:find {} :relations {:user {}}})
+          fetched (store/fetch-resource deps CommentsResource {} query)]
+      (doseq [i (take (count (:_documents fetched)) (range))]
+        (is (= #{:_id :username}
+               (-> fetched (get-in [:_documents i :user]) keys set))))))
+
+  (testing "users fetching should not show password field"
+    (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+          query (validate-query deps UsersResource request {})
+          fetched (store/fetch-resource deps UsersResource {} query)]
+      (is (nil?
+            (-> fetched :_documents first :password))))
+    (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+          query (validate-query deps UsersResource request {:fields [:password]})
+          fetched (store/fetch-resource deps UsersResource {} query)]
+      (is (nil?
+            (-> fetched :_documents first :password)))))
+  )

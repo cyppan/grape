@@ -9,28 +9,32 @@
   (:import (org.bson.types ObjectId)))
 
 (defprotocol DataSource
-  (fetch [_ source query])
-  (count [_ source query])
+  (fetch [_ source query opts])
+  (count [_ source query opts])
   (insert [_ source document])
   (partial-update [_ source id document])
   (update [_ source id document])
-  (delete [_ source id]))
+  (delete [_ source id opts]))
 
 (defrecord MongoDataSource [db]
   DataSource
-  (fetch [_ source {:keys [find fields paginate sort] :as query}]
-    (let [{:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
-          coerced (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
+  (fetch [_ source {:keys [find fields paginate sort] :as query} {:keys [soft-delete?] :as opts}]
+    (let [find (if soft-delete?
+                 (if (:_deleted find) find (merge find {:_deleted {"$ne" true}})))
+          {:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
+          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
       (mq/with-collection
         db source
-        (mq/find coerced)
+        (mq/find find)
         (merge (if fields (mq/partial-query (mq/fields fields)) {}))
         (merge (if (and sort? sort) (mq/partial-query (mq/sort sort)) {}))
         (merge (if paginate?
                  (mq/partial-query (mq/paginate :page (:page (or paginate {}) 1) :per-page (:per-page (or paginate {}) 50)))
                  {})))))
-  (count [_ source {:keys [find]}]
-    (mc/count db source find))
+  (count [_ source {:keys [find]} {:keys [soft-delete?] :as opts}]
+    (let [find (if soft-delete?
+                 (if (:_deleted find) find (merge find {:_deleted {"$ne" true}})))]
+      (mc/count db source find)))
   (insert [_ source document]
     (mc/insert db source document))
   (partial-update [_ source id document]
@@ -39,14 +43,18 @@
   (update [_ source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
       (mc/update db source {:_id coerced} document)))
-  (delete [_ source id]
+  (delete [self source id {:keys [soft-delete?] :as opts}]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
-      (mc/remove db source {:_id coerced}))))
+      (if soft-delete?
+        (partial-update self source id {:_deleted true})
+        (mc/remove db source {:_id coerced})))))
 
 (defrecord AtomDataSource [atom-map]
   DataSource
-  (fetch [_ source {:keys [find paginate sort fields] :as query}]
-    (let [{:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
+  (fetch [_ source {:keys [find paginate sort fields] :as query} {:keys [soft-delete?] :as opts}]
+    (let [find (if soft-delete?
+                 (if (:_deleted find) find (merge find {:_deleted {"$ne" true}})))
+          {:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
           documents (get @atom-map source)
           coerced (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
       (->> documents
@@ -64,8 +72,8 @@
            (?>> (and paginate? (:per-page paginate)) (drop (* (dec (or (:page paginate 1))) (:per-page paginate))))
            (?>> (and paginate? (:per-page paginate)) (take (:per-page paginate)))
            (map #(select-keys % fields)))))
-  (count [self source query]
-    (clojure.core/count (fetch self source (assoc query :opts {:paginate? false :sort? false}))))
+  (count [self source query opts]
+    (clojure.core/count (fetch self source (assoc query :opts {:paginate? false :sort? false}) opts)))
   (insert [_ source document]
     (swap! atom-map
            (fn [m]
@@ -89,14 +97,16 @@
                                             document
                                             doc))
                                         v))))))
-  (delete [_ source id]
+  (delete [self source id {:keys [soft-delete?] :as opts}]
     (swap! atom-map
            (fn [m]
-             (update-in m [source] (fn [v]
-                                   (filter
-                                     (fn [doc]
-                                       (not= (:_id doc) id))
-                                     v)))))))
+             (if soft-delete?
+               (partial-update self source id {:_deleted true})
+               (update-in m [source] (fn [v]
+                                     (filter
+                                       (fn [doc]
+                                         (not= (:_id doc) id))
+                                       v))))))))
 
 ;(def store
 ;  (->AtomDataSource
@@ -141,11 +151,11 @@
         fetch-graph
         {:documents
          (fnk []
-           (fetch store (get-in resource [:datasource :source]) query))}
+           (fetch store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))}
         count? (get-in query [:opts :count?])
         fetch-graph-with-count
         (if count?
-          (assoc fetch-graph :count (fnk [] (count store (get-in resource [:datasource :source]) query)))
+          (assoc fetch-graph :count (fnk [] (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})))
           fetch-graph)
         fetch-graph-with-relations
         (if (empty? relations)
@@ -171,7 +181,7 @@
                           (let [path (:path relation-spec)
                                 at-path (get-in doc path)]
                             (if (vector? at-path)
-                              (assoc-in {} path (filter #((set at-path) (:_id %)) relations-fetched))
+                              (assoc-in {} path (into [] (filter #((set at-path) (:_id %)) relations-fetched)))
                               (assoc-in {} path (first (filter #(= (:_id %) at-path) relations-fetched)))))
                           :ref-field
                           (let [path (:path relation-spec)
@@ -182,10 +192,11 @@
                               (assoc-in {} path
                                         (->> relations-fetched
                                              (filter #(= (field %) (:_id doc)))
+                                             (into [])
                                              (?>> arity-single? first))))))))))
       (#(merge {:_count (:count fetched)}
                {:_query query}
-               {:_documents %})))))
+               {:_documents (into [] %)})))))
 
 (defn fetch-item [deps resource request query]
   (->
