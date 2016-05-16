@@ -1,5 +1,8 @@
 # Grappe
 
+[![Clojars Project](https://img.shields.io/clojars/v/grappe.svg)](https://clojars.org/grappe)
+[![CircleCI](https://circleci.com/gh/cyppan/grappe.svg?style=shield)](https://circleci.com/gh/cyppan/grappe)
+
 A Clojure library designed to build data-first APIs.
 This library is a work in progress.
 
