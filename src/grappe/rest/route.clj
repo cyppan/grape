@@ -1,51 +1,51 @@
 (ns grappe.rest.route
   (:require [cheshire.core :refer :all]
-            [grappe.store :as store]))
+            [grappe.store :as store]
+            [grappe.rest.parser :refer [parse-query format-eve-response]]
+            [grappe.query :refer [validate-query]]
+            [plumbing.core :refer :all]))
 
-(def default-id-pattern #"[0-9a-f]{24}")
-
-(defn rest-resource-handler [{:keys [resources-registry hooks] :as deps} resource {:keys [route-params] :as request}]
+(defn rest-resource-handler [deps resource request]
   (let [method (:request-method request)
         item-method? (boolean (get-in request [:route-params :_id]))
-        ?404 (or
-               (and (not item-method?) (not ((:resource-methods resource) method)))
-               (and item-method? (not ((:item-methods resource) method))))
-        get? (= :get method)
-        post? (= :post method)
-        patch? (= :patch method)
-        put? (= :put method)
-        delete? (= :delete method)
+        resource-method? (not item-method?)
         private? (and
                    (:auth-strategy resource)
                    (condp = method
                      :post (not (:post (into #{} (:public-methods request))))
-                     :get  (not (:get (into #{} (:public-methods request))))
-                     :put  (not (:put (into #{} (:public-methods request))))
+                     :get (not (:get (into #{} (:public-methods request))))
+                     :put (not (:put (into #{} (:public-methods request))))
                      :patch (not (:patch (into #{} (:public-methods request))))
-                     :delete (not (:delete (into #{} (:public-methods request))))))]
-    (prn "query" (update-in (parse-string (get-in request [:query-params "query"]) true) [:find] (fn [find] (merge find (:route-params request)))))
+                     :delete (not (:delete (into #{} (:public-methods request))))))
+        allowed-method? (if item-method?
+                          (method (:item-methods resource #{}))
+                          (method (:resource-methods resource #{})))]
     (cond
-      ?404
+      (not allowed-method?)
       {:status 404 :body {:_status "404" :_message "The method is not supported for this resource"}}
-      (and get? (not item-method?))
-      (-> request
-          (#(assoc % :query (update-in (parse-string (get-in request [:query-params "query"]) true) [:find] (fn [find] (merge find (:route-params request))))))
-          (#(store/fetch-resource
-             (assoc deps :resources-registry resources-registry
-                         :hooks hooks) resource % {}))
-          (#(assoc {:status 200} :body %)))
-      (and get? item-method?)
-      (-> request
-          (#(assoc % :query (update-in (parse-string (get-in request [:query-params "query"]) true) [:find] (fn [find] (merge find (:route-params request))))))
-          (#(store/fetch-item
-             (assoc deps :resources-registry resources-registry
-                         :hooks hooks) resource %))
-          (#(assoc {:status 200} :body %))))))
+      (and private? (not (:auth request)))
+      (throw (ex-info "Unauthorized" {:status 401}))
+      (and resource-method? (= method :get))
+      (->> request
+           parse-query
+           (validate-query deps resource request)
+           (store/fetch-resource deps resource request)
+           (assoc {:status 200} :body)
+           format-eve-response)
+      (and item-method? (= method :get))
+      (->> request
+           parse-query
+           (validate-query deps resource request)
+           (store/fetch-item deps resource request)
+           (assoc {:status 200} :body)
+           format-eve-response)
+      :else
+      {:status 501 :body {:_status "501" :_message "Not implemented yet"}})))
 
 (defn build-resource-routes [deps resource]
-  (let [id-pattern (:id-pattern resource default-id-pattern)
-        extra-routes (:extra-routes resource {})]
-    (concat [{(:url resource) {"" (partial rest-resource-handler deps resource)
-                               ["/" [id-pattern :_id]] (partial rest-resource-handler deps resource)}}]
-            (for [[route-path handler] extra-routes]
-              [route-path (partial handler deps resource)]))))
+  (let [extra-endpoints (:extra-endpoints resource {})]
+    ["/" (into []
+               (concat [[(:url resource) (partial rest-resource-handler deps resource)]
+                        [[(str (:url resource) "/") :_id] (partial rest-resource-handler deps resource)]]
+                       (for [[route-path handler] extra-endpoints]
+                         [route-path (partial handler deps resource)])))]))

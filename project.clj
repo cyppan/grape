@@ -8,4 +8,5 @@
                  [prismatic/schema "1.1.0"]
                  [prismatic/plumbing "0.5.3"]
                  [com.novemberain/monger "3.0.1"]
-                 [org.clojure/core.match "0.3.0-alpha4"]])
+                 [org.clojure/core.match "0.3.0-alpha4"]
+                 [bidi "2.0.9"]])
