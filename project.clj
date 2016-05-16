@@ -9,4 +9,5 @@
                  [prismatic/plumbing "0.5.3"]
                  [com.novemberain/monger "3.0.1"]
                  [org.clojure/core.match "0.3.0-alpha4"]
-                 [bidi "2.0.9"]])
+                 [bidi "2.0.9"]]
+  :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]])
