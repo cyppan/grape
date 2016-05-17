@@ -18,8 +18,11 @@
                           (into [])))
         relations (if embedded
                     (->> (parse-string embedded true)
-                         (map (fn [[k v]] [k {}]))
-                         (into {})))
+                         (reduce (fn [acc [k _]]
+                                   (let [[relation child] (clojure.string/split (name k) #"\.")]
+                                     (if child
+                                       (merge acc (assoc-in {} [(keyword relation) :relations (keyword child)] {}))
+                                       (merge acc (assoc-in {} [(keyword relation)] {}))))) {})))
         page (if page (read-string page))
         per-page (if max_results (read-string max_results))]
     ;; where is the query that is to be transmitted to the mongoDB data layer directly
