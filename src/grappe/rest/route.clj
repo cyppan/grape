@@ -29,6 +29,7 @@
       (->> request
            parse-query
            (validate-query deps resource request)
+           (#(update-in % [:opts] (fn [opts] (merge opts {:count? true}))))
            (store/fetch-resource deps resource request)
            (assoc {:status 200} :body)
            format-eve-response)
@@ -40,12 +41,16 @@
            (assoc {:status 200} :body)
            format-eve-response)
       :else
-      {:status 501 :body {:_status "501" :_message "Not implemented yet"}})))
+      nil)))
 
 (defn build-resource-routes [deps resource]
   (let [extra-endpoints (:extra-endpoints resource {})]
-    ["/" (into []
-               (concat [[(:url resource) (partial rest-resource-handler deps resource)]
-                        [[(str (:url resource) "/") :_id] (partial rest-resource-handler deps resource)]]
-                       (for [[route-path handler] extra-endpoints]
-                         [route-path (partial handler deps resource)])))]))
+    (into []
+          (concat [[(:url resource) (partial rest-resource-handler deps resource)]
+                   [[(str (:url resource) "/") :_id] (partial rest-resource-handler deps resource)]]
+                  (for [[route-path handler] extra-endpoints]
+                    [route-path (partial handler deps resource)])))))
+
+(defn build-resources-routes [{:keys [resources-registry] :as deps}]
+  (let [resources (for [[_ resource] resources-registry] resource)]
+    (mapcat identity (map (partial build-resource-routes deps) resources))))

@@ -3,10 +3,10 @@
             [grappe.rest.parser :refer :all]
             [grappe.rest.route :refer :all]
             [cheshire.core :refer :all]
-            [bidi.bidi :refer :all]))
+            [bidi.bidi :refer :all]
+            [grappe.system-test :refer :all]))
 
-(deftest eve-like-query
-
+(deftest query-parser
   (testing "Eve query DSL compatibility"
     (let [where "{\"name\":{\"$regex\":\"toto\"}}"
           projection "{\"name\":1}"
@@ -41,9 +41,10 @@
     (let [resource {:url              "myresource"
                     :resource-methods #{:get}
                     :item-methods     #{:get}}
-          resource-match (match-route (build-resource-routes {} resource) "/myresource")
-          item-match (match-route (build-resource-routes {} resource) "/myresource/1234")]
-      (is (nil? (match-route (build-resource-routes {} resource) "/unknown")))
+          routes ["/" (build-resources-routes {:resources-registry {:myresource resource}})]
+          resource-match (match-route routes "/myresource")
+          item-match (match-route routes "/myresource/1234")]
+      (is (nil? (match-route routes "/unknown")))
       (is (not (nil? (:handler resource-match))))
       (is (= "1234" (get-in item-match [:route-params :_id])))))
 
@@ -53,7 +54,7 @@
                     :item-methods     #{:get}
                     :extra-endpoints  [[["extra/" :param] identity]
                                        ["other" identity]]}
-          routes (build-resource-routes {} resource)
+          routes ["/" (build-resource-routes {} resource)]
           resource-match (match-route routes "/myresource")
           item-match (match-route routes "/myresource/1234")
           extra-match (match-route routes "/extra/toto")
@@ -62,6 +63,17 @@
       (is (not (nil? (:handler resource-match))))
       (is (= "1234" (get-in item-match [:route-params :_id])))
       (is (= "toto" (get-in extra-match [:route-params :param])))
-      (is (not (nil? (:handler other-match))))))
-  )
+      (is (not (nil? (:handler other-match)))))))
+
+(deftest get-resource
+  (testing "get public users"
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/public_users")
+          handler (:handler match)
+          request {:query-params {"query" ""} :request-method :get}
+          resp (handler request)]
+      (is (= 3 (:_count resp)))
+      (is (= #{"user 1" "user 2" "user 3"} (->> (:_items resp)
+                                                (map :username)
+                                                (into #{})))))))
 
