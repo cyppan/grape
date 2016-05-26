@@ -3,9 +3,9 @@
             [schema.spec.core :as spec]
             [schema.spec.collection :refer [subschemas]]
             [grappe.utils :refer :all]
-            [grappe.schema :refer :all]
             [grappe.hooks.core :refer :all]))
 
+(def ? s/optional-key)
 (def StrOrKeyword (s/either s/Str s/Keyword))
 (def ^:const OPERATORS
   #{"$gt" "$gte" "$lt" "$lte" "$all" "$in" "$nin" "$ne" "$elemMatch" "$regex" "$options" "$and" "$or" "$nor"

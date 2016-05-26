@@ -8,7 +8,7 @@
             [grappe.hooks.core :refer [compose-hooks]]
             [schema.spec.core :as spec]
             [schema.spec.leaf :as leaf]
-            [grappe.schema :refer [read-only Url Str]])
+            [grappe.schema :refer [read-only Url Str resource-exists ?]])
   (:import (org.bson.types ObjectId)))
 
 (def store-inst
@@ -28,13 +28,13 @@
 
 (def CompaniesResource
   {:datasource              {:source "companies"}
-   :schema                  {:_id    ObjectId
-                             :name   s/Str
-                             :domain s/Str
-                             :roles [s/Str]
-                             :info {:gender (s/enum :male :female)
-                                    :ro (read-only s/Str)}
-                             :pages [{:url Url :toto (Str 1 10)}]
+   :schema                  {(? :_id)                   ObjectId
+                             :name                      s/Str
+                             (? :domain)                s/Str
+                             (? :roles)                 (read-only [s/Str])
+                             (? :info)                  (s/maybe {:gender (s/enum :male :female)})
+                             (? :pages)                 [{:url         Url
+                                                          :description (Str 5 80)}]
                              (s/optional-key :features) (s/maybe {:premium s/Bool})
                              }
    :url                     "companies"
@@ -55,7 +55,7 @@
 (def UsersResource
   {:datasource       {:source "users"}
    :schema           {:_id      ObjectId
-                      :company  ObjectId
+                      :company  (s/constrained ObjectId (resource-exists :companies))
                       :username #"^[A-Za-z0-9_ ]{2,25}$"
                       :email    s/Str
                       :password s/Str}
@@ -78,11 +78,11 @@
                                     :field    :user}}})
 
 (def PublicUsersResource
-  {:datasource {:source "users"}
-   :schema     (select-keys (:schema UsersResource) [:_id :username])
-   :url        "public_users"
+  {:datasource       {:source "users"}
+   :schema           (select-keys (:schema UsersResource) [:_id :username])
+   :url              "public_users"
    :resource-methods #{:get}
-   :public-methods #{:get}})
+   :public-methods   #{:get}})
 
 (def CompaniesPermissionsResource
   {:datasource       {:source "permissions"}

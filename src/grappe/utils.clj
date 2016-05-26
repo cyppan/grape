@@ -1,4 +1,8 @@
-(ns grappe.utils)
+(ns grappe.utils
+  (:require [schema.core :as s])
+  (:import (schema.spec.leaf LeafSpec)
+           (schema.spec.variant VariantSpec)
+           (schema.spec.collection CollectionSpec)))
 
 (defn deep-merge
   "Recursively merges maps. If keys are not maps, the last value wins."
@@ -46,7 +50,6 @@
                                  %)))
     (-> @expanded set)))
 
-
 (defn walk-structure [s key-fn leaf-fn]
   (cond
     (map? s)
@@ -59,3 +62,26 @@
             [] (or s []))
     :else
     (leaf-fn s)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Schema utils
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn walk-schema [s key-fn leaf-fn]
+  (let [spec (s/spec s)]
+    (cond
+      (or (instance? LeafSpec spec) (instance? VariantSpec spec))
+      (leaf-fn s)
+      (and (instance? CollectionSpec spec) (map? s))
+      (reduce (fn [acc [k v]]
+                (assoc acc (key-fn (s/explicit-schema-key k)) (walk-schema v key-fn leaf-fn)))
+              {} s)
+      (and (instance? CollectionSpec spec) (sequential? s))
+      (reduce (fn [acc v]
+                (conj acc (walk-schema v key-fn leaf-fn)))
+              [] (or s [])))))
+
+(defn get-schema-keyseqs [schema]
+  (->> (walk-schema schema identity #(do % 1))
+       flatten-structure
+       (map first)))
