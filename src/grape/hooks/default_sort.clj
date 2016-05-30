@@ -1,4 +1,4 @@
-(ns grappe.hooks.default-sort)
+(ns grape.hooks.default-sort)
 
 (def hooks
   {:pre-fetch (fn [{:keys [config]} resource request query]

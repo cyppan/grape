@@ -1,10 +1,10 @@
-(ns grappe.rest-test
+(ns grape.rest-test
   (:require [clojure.test :refer :all]
-            [grappe.rest.parser :refer :all]
-            [grappe.rest.route :refer :all]
+            [grape.rest.parser :refer :all]
+            [grape.rest.route :refer :all]
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
-            [grappe.system-test :refer :all]))
+            [grape.system-test :refer :all]))
 
 (deftest query-parser
   (testing "Eve query DSL compatibility"
@@ -27,7 +27,7 @@
                     :sort      {:_created -1}
                     :relations {:myrelation {}}}))))
 
-  (testing "Grappe query DSL"
+  (testing "Grape query DSL"
     (let [query {:find      {:name {:$regex "toto"}}
                  :fields    ["name"]
                  :paginate  {:page 1 :per-page 50}
@@ -73,6 +73,10 @@
           request {:query-params {"query" ""} :request-method :get}
           resp (handler request)]
       (is (= 3 (:_count resp)))
+      (is (= #{:_id :username} (->> (:_items resp)
+                                    first
+                                    keys
+                                    (into #{}))))
       (is (= #{"user 1" "user 2" "user 3"} (->> (:_items resp)
                                                 (map :username)
                                                 (into #{})))))))

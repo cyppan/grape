@@ -1,14 +1,14 @@
-(ns grappe.system-test
-  (:require [grappe.store :as store]
+(ns grape.system-test
+  (:require [grape.store :as store]
             [schema.core :as s]
-            [grappe.hooks.auth-field :refer [hooks] :rename {hooks auth-field-hooks}]
-            [grappe.hooks.default-sort :refer [hooks] :rename {hooks default-sort-hooks}]
-            [grappe.hooks.restricts-fields :refer [hooks] :rename {hooks restrict-fields-hooks}]
-            [grappe.hooks.inject-pagination :refer [hooks] :rename {hooks inject-pagination-hooks}]
-            [grappe.hooks.core :refer [compose-hooks]]
+            [grape.hooks.auth-field :refer [hooks] :rename {hooks auth-field-hooks}]
+            [grape.hooks.default-sort :refer [hooks] :rename {hooks default-sort-hooks}]
+            [grape.hooks.restricts-fields :refer [hooks] :rename {hooks restrict-fields-hooks}]
+            [grape.hooks.inject-pagination :refer [hooks] :rename {hooks inject-pagination-hooks}]
+            [grape.hooks.core :refer [compose-hooks]]
             [schema.spec.core :as spec]
             [schema.spec.leaf :as leaf]
-            [grappe.schema :refer [read-only Url Str resource-exists ?]])
+            [grape.schema :refer [read-only Url Str resource-exists ?]])
   (:import (org.bson.types ObjectId)))
 
 (def store-inst
@@ -79,7 +79,8 @@
 
 (def PublicUsersResource
   {:datasource       {:source "users"}
-   :schema           (select-keys (:schema UsersResource) [:_id :username])
+   :schema           {}
+   :fields           #{:_id :username}
    :url              "public_users"
    :resource-methods #{:get}
    :public-methods   #{:get}})

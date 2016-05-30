@@ -1,4 +1,4 @@
-(ns grappe.utils
+(ns grape.utils
   (:require [schema.core :as s])
   (:import (schema.spec.leaf LeafSpec)
            (schema.spec.variant VariantSpec)

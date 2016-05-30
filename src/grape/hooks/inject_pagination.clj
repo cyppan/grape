@@ -1,4 +1,4 @@
-(ns grappe.hooks.inject-pagination)
+(ns grape.hooks.inject-pagination)
 
 (def ^:const max-limit 100)
 

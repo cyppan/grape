@@ -1,8 +1,9 @@
-(ns grappe.rest.route
+(ns grape.rest.route
   (:require [cheshire.core :refer :all]
-            [grappe.store :as store]
-            [grappe.rest.parser :refer [parse-query format-eve-response]]
-            [grappe.query :refer [validate-query]]
+            [grape.core :refer :all]
+            [grape.rest.parser :refer [parse-query format-eve-response]]
+            [grape.query :refer [validate-query]]
+            [grape.schema :refer [validate-create validate-update validate-partial-update]]
             [plumbing.core :refer :all]))
 
 (defn rest-resource-handler [deps resource request]
@@ -30,18 +31,25 @@
            parse-query
            (validate-query deps resource request)
            (#(update-in % [:opts] (fn [opts] (merge opts {:count? true}))))
-           (store/fetch-resource deps resource request)
+           (fetch-resource deps resource request)
            (assoc {:status 200} :body)
            format-eve-response)
       (and item-method? (= method :get))
       (->> request
            parse-query
            (validate-query deps resource request)
-           (store/fetch-item deps resource request)
+           (fetch-item deps resource request)
            (assoc {:status 200} :body)
            format-eve-response)
-      :else
-      nil)))
+      (and resource-method? (= method :post))
+      (let [query (->> request
+                       parse-query
+                       (validate-query deps resource request))
+            payload (->> (validate-create deps resource request (:body request)))]
+        (->> request
+             parse-query
+             (validate-query deps resource request)))
+      )))
 
 (defn build-resource-routes [deps resource]
   (let [extra-endpoints (:extra-endpoints resource {})]

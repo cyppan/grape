@@ -1,4 +1,4 @@
-(ns grappe.rest.parser
+(ns grape.rest.parser
   (:require [cheshire.core :refer :all]
             [plumbing.core :refer :all]))
 

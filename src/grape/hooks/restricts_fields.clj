@@ -1,6 +1,6 @@
-(ns grappe.hooks.restricts-fields
-  (:require [grappe.utils :refer :all]
-            [grappe.schema :refer :all]))
+(ns grape.hooks.restricts-fields
+  (:require [grape.utils :refer :all]
+            [grape.schema :refer :all]))
 
 (def hooks
   {:pre-fetch (fn [deps resource request query]

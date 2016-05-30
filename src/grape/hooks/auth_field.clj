@@ -1,4 +1,4 @@
-(ns grappe.hooks.auth-field)
+(ns grape.hooks.auth-field)
 
 (def hooks
   {:pre-fetch (fn [deps resource request query]

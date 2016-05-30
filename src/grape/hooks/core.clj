@@ -1,4 +1,4 @@
-(ns grappe.hooks.core)
+(ns grape.hooks.core)
 
 (def no-op-4
   (fn [deps resource request arg]

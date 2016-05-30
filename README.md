@@ -1,9 +1,9 @@
-# Grappe
+# Grape
 
-[![Clojars Project](https://img.shields.io/clojars/v/grappe.svg)](https://clojars.org/grappe)
-[![CircleCI](https://circleci.com/gh/cyppan/grappe.svg?style=shield)](https://circleci.com/gh/cyppan/grappe)
-[![codecov](https://codecov.io/gh/cyppan/grappe/branch/master/graph/badge.svg)](https://codecov.io/gh/cyppan/grappe)
-[![Dependencies Status](https://jarkeeper.com/cyppan/grappe/status.svg)](https://jarkeeper.com/cyppan/grappe)
+[![Clojars Project](https://img.shields.io/clojars/v/grape.svg)](https://clojars.org/grape)
+[![CircleCI](https://circleci.com/gh/cyppan/grape.svg?style=shield)](https://circleci.com/gh/cyppan/grape)
+[![codecov](https://codecov.io/gh/cyppan/grape/branch/master/graph/badge.svg)](https://codecov.io/gh/cyppan/grape)
+[![Dependencies Status](https://jarkeeper.com/cyppan/grape/status.svg)](https://jarkeeper.com/cyppan/grape)
 
 A Clojure library designed to build data-first APIs.
 This library is a work in progress.
