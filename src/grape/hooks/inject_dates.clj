@@ -1,4 +1,7 @@
-(ns grape.hooks.inject-dates)
+(ns grape.hooks.inject-dates
+  (:require [clj-time.core :as t]))
 
 (def hooks
-  {:pre-create (fn [deps resource request payload] payload)})
+  {:pre-create-post-validate
+   (fn [deps resource request payload]
+     (merge (or payload {}) {:_created (t/now)}))})

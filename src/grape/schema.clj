@@ -46,6 +46,7 @@
         default-lang (:default-language config :en)
         lang (keyword (get-in *request* [:accept :language] default-lang))
         translations (deep-merge errors-translations (or translations {}))
+        err (str err)
         found (->> (lang translations)
                    (filter (fn [[k _]]
                              (if (instance? Pattern k)
@@ -73,8 +74,7 @@
           deps-store (:store *deps*)
           source (get-in resource [:datasource :source])]
       (try
-        (boolean
-          (store/count deps-store source {:find {:_id id}} {}))
+        (> (store/count deps-store source {:find {:_id id}} {}) 0)
         (catch Exception _ false)))))
 
 (defrecord ReadOnly [schema]
@@ -108,62 +108,53 @@
       (coerce/json-coercion-matcher schema)))
 
 (defn map-validation-error [error]
-  {:type ::error
+  {:type :validation-failed
    :error
-   (clojure.walk/postwalk
-     (fn [el]
-       (cond
-         (and (instance? ValidationError el) (= (type (.-schema el)) java.lang.Class))
-         (translate-error "type-invalid")
-         (and (instance? ValidationError el)
-              (= (.-fail-explanation el) 'read-only))
-         (translate-error "read-only")
-         (and (instance? ValidationError el)
-              (= (.-fail-explanation el) 'not)
-              (instance? Predicate (.-schema el)))
-         (translate-error (:pred-name (.-schema el)))
-         (and (instance? ValidationError el)
-              (= (.-fail-explanation el) 'not)
-              (instance? Constrained (.-schema el)))
-         (translate-error (:post-name (.-schema el)))
-         (symbol? el)
-         (translate-error (str el))
-         :else el))
-     error)})
+         (clojure.walk/postwalk
+           (fn [el]
+             (cond
+               (and (instance? ValidationError el) (= (type (.-schema el)) java.lang.Class))
+               (translate-error "type-invalid")
+               (and (instance? ValidationError el)
+                    (= (.-fail-explanation el) 'read-only))
+               (translate-error "read-only")
+               (and (instance? ValidationError el)
+                    (= (.-fail-explanation el) 'not)
+                    (instance? Predicate (.-schema el)))
+               (translate-error (:pred-name (.-schema el)))
+               (and (instance? ValidationError el)
+                    (= (.-fail-explanation el) 'not)
+                    (instance? Constrained (.-schema el)))
+               (translate-error (:post-name (.-schema el)))
+               (symbol? el)
+               (translate-error (str el))
+               :else el))
+           error)})
 
 (defn validate-create [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
             *request* request]
-    (let [hooks (compose-hooks hooks resource)
-          pre-validate-fn (:pre-create-pre-validate hooks)
-          payload (pre-validate-fn deps resource request payload)]
-      (try+
-        (stc/coerce payload (:schema resource) cleve-coercion-matcher)
-        (catch [:type :schema-tools.coerce/error] {:keys [error]}
-          (throw (ex-info "validation-create failed" (map-validation-error error))))))))
+    (try+
+      (stc/coerce payload (:schema resource) cleve-coercion-matcher)
+      (catch [:type :schema-tools.coerce/error] {:keys [error]}
+        (throw (ex-info "validation-create failed" (map-validation-error error)))))))
 
-(defn validate-update [{:keys [hooks] :as deps} resource request payload existing]
+(defn validate-update [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
             *request* request]
-    (let [hooks (compose-hooks hooks resource)
-          pre-validate-fn (:pre-update-pre-validate hooks)
-          payload (pre-validate-fn deps resource request payload existing)]
-      (try+
-        (stc/coerce payload (:schema resource) cleve-coercion-matcher)
-        (catch [:type :schema-tools.coerce/error] {:keys [error]}
-          (throw (ex-info "validation-update failed" (map-validation-error error))))))))
+    (try+
+      (stc/coerce payload (:schema resource) cleve-coercion-matcher)
+      (catch [:type :schema-tools.coerce/error] {:keys [error]}
+        (throw (ex-info "validation-update failed" (map-validation-error error)))))))
 
-(defn validate-partial-update [{:keys [hooks] :as deps} resource request payload existing]
+(defn validate-partial-update [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
             *request* request]
-    (let [hooks (compose-hooks hooks resource)
-          pre-validate-fn (:pre-update-pre-validate hooks)
-          payload (pre-validate-fn deps resource request payload existing)
-          ;; for partial update, the schema should have all of its keys optional
-          schema (walk-schema (:schema resource) #(s/optional-key (s/explicit-schema-key %)) identity)]
+    ;; for partial update, the schema should have all of its keys optional
+    (let [schema (walk-schema (:schema resource) #(s/optional-key (s/explicit-schema-key %)) identity)]
       (try+
         (stc/coerce payload schema cleve-coercion-matcher)
         (catch [:type :schema-tools.coerce/error] {:keys [error]}

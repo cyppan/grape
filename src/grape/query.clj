@@ -30,10 +30,13 @@
              flatten
              (map name)
              set)
+        in-fields?
+        (into #{} (map name (:fields resource #{})))
         valid-key? (fn [k]
                      (or
                        (re-matches #"[0-9]+" k)
                        (in-schema-keys? k)
+                       (in-fields? k)
                        (in-operators? k)
                        (= "_deleted" k)))]
     (-> where
@@ -53,24 +56,23 @@
   [{:keys [hooks resources-registry] :as deps} :- s/Any
    resource :- s/Any
    request :- s/Any
-   query :- Query]
+   query :- Query
+   {:keys [recur?]}]
   ;; The query is already structurally valid (validated by the Query Prismatic Schema)
-  ;; Now we recursively walk the query spec, validates the where parameters and the query with hooks
-  (letfn [(walk-query [res q]
-            (validate-query-find res (:find q))
-            (let [hook-fn (:pre-fetch (compose-hooks hooks resource))
-                  q (hook-fn deps res request q)
-                  {:keys [relations]} q]
-              (merge (dissoc q :relations)
-                     {:relations (apply merge (for [[relation-key relation-q] relations
-                                                    :let [relation-spec (get-in res [:relations relation-key])
-                                                          relation-res ((:resource relation-spec) resources-registry)
-                                                          embedded? (= :embedded (:type relation-spec))
-                                                          relation-q (if embedded?
-                                                                       (merge relation-q {:opts {:count?    false
-                                                                                                 :paginate? false
-                                                                                                 :sort?     false}})
-                                                                       (deep-merge relation-q {:opts {:count? false}}))]
-                                                    :when (and relation-spec relation-res)]
-                                                {relation-key (walk-query relation-res relation-q)}))})))]
-    (walk-query resource query)))
+  ;; Now we walk the query spec, validates the where parameters and the query with hooks
+  (validate-query-find resource (:find query))
+  (let [{:keys [relations]} query]
+    (merge (dissoc query :relations)
+           {:relations (apply merge (for [[relation-key relation-q] relations
+                                          :let [relation-spec (get-in resource [:relations relation-key])
+                                                relation-res ((:resource relation-spec) resources-registry)
+                                                embedded? (= :embedded (:type relation-spec))
+                                                relation-q (if embedded?
+                                                             (merge relation-q {:opts {:count?    false
+                                                                                       :paginate? false
+                                                                                       :sort?     false}})
+                                                             (deep-merge relation-q {:opts {:count? false}}))]
+                                          :when (and relation-spec relation-res)]
+                                      {relation-key (if recur?
+                                                      (validate-query deps relation-res request relation-q {:recur? true})
+                                                      relation-q)}))})))

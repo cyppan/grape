@@ -6,7 +6,8 @@
             [grape.store :refer :all]
             [plumbing.core :refer :all]
             [clojure.core.match :refer [match]]
-            [plumbing.graph :as graph]))
+            [plumbing.graph :as graph]
+            [grape.query :refer [validate-query]]))
 
 (declare fetch-resource)
 
@@ -41,11 +42,14 @@
            [_ _] nil)))
 
 (defn fetch-resource [{:keys [store hooks] :as deps} resource request query]
-  (let [{:keys [relations]} query
+  (let [[pre-fetch-fn post-fetch-fn] ((juxt :pre-fetch :post-fetch) (compose-hooks hooks resource))
+        query (pre-fetch-fn deps resource request query)
+        query (validate-query deps resource request query {:recur? false})
+        {:keys [relations]} query
         fetch-graph
         {:documents
          (fnk []
-              (fetch store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))}
+           (fetch store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))}
         count? (get-in query [:opts :count?])
         fetch-graph-with-count
         (if count?
@@ -60,7 +64,7 @@
                    (for [[relation-key relation-query] relations]
                      {relation-key
                       (fnk [documents]
-                           (fetch-relation-resource deps resource request relation-key relation-query documents))}))))
+                        (fetch-relation-resource deps resource request relation-key relation-query documents))}))))
         fetcher (graph/par-compile fetch-graph-with-relations)
         fetched (fetcher {})]
     (->>
@@ -90,23 +94,38 @@
                                              (?>> arity-single? first))))))))))
       (#(merge {:_count (:count fetched)}
                {:_query query}
-               {:_documents (into [] %)})))))
+               {:_documents (into [] %)}))
+      (post-fetch-fn deps resource request))))
 
 (defn fetch-item [deps resource request query]
   (->
     (fetch-resource deps resource request (assoc query :opts {:count? false :paginate? false :sort? false}))
     :_documents
     first
-    (#(if (nil? %) (throw (ex-info "Not found" {:status 404})) %))))
+    (#(if (nil? %) (throw (ex-info "Not found" {:type :not-found})) %))))
 
 (defn create-resource [{:keys [store hooks] :as deps} resource request payload]
   (let [hooks (compose-hooks hooks resource)
-        [post-validate-fn] ((juxt :pre-create-post-validate :post-create-sync :post-create-async) hooks)]
-    (try+
-      (->> (validate-create deps resource request payload)
-           (post-validate-fn deps resource request)
-           (insert store (get-in resource [:datasource :source])))
-      (catch [:type :grape.schema/error] {:keys [error]}
-        (throw (ex-info "validation failed"
-                        {:status 422
-                         :body error}))))))
+        [pre-validate-fn post-validate-fn post-create-fn post-create-async-fn]
+        ((juxt :pre-create-pre-validate :pre-create-post-validate :post-create :post-create-async) hooks)]
+    (let [created (->> payload
+                       (pre-validate-fn deps resource request)
+                       (validate-create deps resource request) ;; let the validation exception throw to the caller
+                       (post-validate-fn deps resource request)
+                       (insert store (get-in resource [:datasource :source]))
+                       (post-create-fn deps resource request))]
+      (future (post-create-async-fn deps resource request created))
+      created)))
+
+(defn update-resource [{:keys [store hooks] :as deps} resource request payload]
+  (let [hooks (compose-hooks hooks resource)
+        [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
+        ((juxt :pre-update-pre-validate :pre-update-post-validate :post-update :post-update-async) hooks)]
+    (let [created (->> payload
+                       (pre-validate-fn deps resource request)
+                       (validate-update deps resource request) ;; let the validation exception throw to the caller
+                       (post-validate-fn deps resource request)
+                       (update store (get-in resource [:datasource :source]) (:_id payload))
+                       (post-update-fn deps resource request))]
+      (future (post-update-async-fn deps resource request created))
+      created)))

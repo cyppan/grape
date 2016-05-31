@@ -30,7 +30,12 @@
 
 (defn compose-hooks [& hooks]
   {:pre-fetch                (gen-hook-fn-4 hooks :pre-fetch)
+   :post-fetch               (gen-hook-fn-4 hooks :post-fetch)
    :pre-create-pre-validate  (gen-hook-fn-4 hooks :pre-create-pre-validate)
    :pre-create-post-validate (gen-hook-fn-4 hooks :pre-create-post-validate)
+   :post-create              (gen-hook-fn-4 hooks :post-create)
+   :post-create-async        (gen-hook-fn-4 hooks :post-create-async)
    :pre-update-pre-validate  (gen-hook-fn-5 hooks :pre-update-pre-validate)
-   :pre-update-post-validate (gen-hook-fn-5 hooks :pre-update-post-validate)})
+   :pre-update-post-validate (gen-hook-fn-5 hooks :pre-update-post-validate)
+   :post-update              (gen-hook-fn-5 hooks :post-update)
+   :post-update-async        (gen-hook-fn-5 hooks :post-update-async)})

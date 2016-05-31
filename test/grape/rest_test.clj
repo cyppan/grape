@@ -4,7 +4,11 @@
             [grape.rest.route :refer :all]
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
-            [grape.system-test :refer :all]))
+            [grape.system-test :refer :all]
+            [slingshot.slingshot :refer [throw+ try+]])
+  (:import (clojure.lang ExceptionInfo)
+           (org.bson.types ObjectId)
+           (org.joda.time DateTime)))
 
 (deftest query-parser
   (testing "Eve query DSL compatibility"
@@ -38,6 +42,7 @@
 
 (deftest route-handlers
   (testing "get resource handler"
+    (load-fixtures)
     (let [resource {:url              "myresource"
                     :resource-methods #{:get}
                     :item-methods     #{:get}}
@@ -49,6 +54,7 @@
       (is (= "1234" (get-in item-match [:route-params :_id])))))
 
   (testing "get resource handler with extra endpoints"
+    (load-fixtures)
     (let [resource {:url              "myresource"
                     :resource-methods #{:get}
                     :item-methods     #{:get}
@@ -67,11 +73,12 @@
 
 (deftest get-resource
   (testing "get public users"
+    (load-fixtures)
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/public_users")
           handler (:handler match)
           request {:query-params {"query" ""} :request-method :get}
-          resp (handler request)]
+          resp (:body (handler request))]
       (is (= 3 (:_count resp)))
       (is (= #{:_id :username} (->> (:_items resp)
                                     first
@@ -81,3 +88,135 @@
                                                 (map :username)
                                                 (into #{})))))))
 
+(deftest create-resource
+  (testing "create - validation fails - required fields"
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users")
+          handler (:handler match)
+          request {:query-params {"query" ""} :body {} :request-method :post}
+          resp (handler request)]
+      (is (= 422 (:status resp)))
+      ))
+
+  (testing "create - validation fails - company not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users")
+          handler (:handler match)
+          request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc9")
+                                                     :username "me"
+                                                     :email    "coucou"
+                                                     :password "secret"} :request-method :post}
+          resp (handler request)]
+      (is (= 422 (:status resp)))
+      (is (= {:company "the resource should exist"} (:body resp)))
+      ))
+
+  (testing "create success"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users")
+          handler (:handler match)
+          request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc1")
+                                                     :username "me"
+                                                     :email    "coucou"
+                                                     :password "secret"} :request-method :post}
+          resp (handler request)
+          inserted-id (get-in resp [:body :_id])]
+      (is (not (nil? inserted-id)))
+      (let [match (match-route routes (str "/users/" inserted-id))
+            handler (:handler match)
+            request (merge {:auth           {:auth_id (str inserted-id)}
+                            :request-method :get}
+                           (select-keys match [:route-params]))
+            resp (handler request)]
+        (is (= "me" (get-in resp [:body :username])))
+        (is (= inserted-id (get-in resp [:body :_id]))))
+      (let [match (match-route routes (str "/me"))
+            handler (:handler match)
+            request {:auth           {:auth_id (str inserted-id)}
+                     :request-method :get}
+            resp (handler request)]
+        (is (= "me" (get-in resp [:body :username])))
+        (is (= inserted-id (get-in resp [:body :_id]))))))
+
+  (testing "create a comment should inject auth field when not specified"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments")
+          handler (:handler match)
+          request {:body           {:text    "coucou !"
+                                    :company "caccccccccccccccccccccc1"}
+                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :request-method :post}
+          resp (handler request)
+          inserted-id (get-in resp [:body :_id])]
+      (is (not (nil? inserted-id)))
+      (let [match (match-route routes (str "/comments/" inserted-id))
+            handler (:handler match)
+            request (merge {:auth           {:auth_id (str inserted-id)}
+                            :request-method :get}
+                           (select-keys match [:route-params]))
+            resp (handler request)]
+        (is (= "coucou !" (get-in resp [:body :text])))
+        (is (= inserted-id (get-in resp [:body :_id]))))))
+
+  (testing "create a comment specifying itself as a user should pass"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments")
+          handler (:handler match)
+          request {:body           {:text    "coucou !"
+                                    :company "caccccccccccccccccccccc1"
+                                    :user    "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :request-method :post}
+          resp (handler request)
+          inserted-id (get-in resp [:body :_id])]
+      (is (not (nil? inserted-id)))
+      (let [match (match-route routes (str "/comments/" inserted-id))
+            handler (:handler match)
+            request (merge {:auth           {:auth_id (str inserted-id)}
+                            :request-method :get}
+                           (select-keys match [:route-params]))
+            resp (handler request)]
+        (is (= "coucou !" (get-in resp [:body :text])))
+        (is (= inserted-id (get-in resp [:body :_id]))))))
+
+  (testing "create a comment for another user should be forbidden"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments")
+          handler (:handler match)
+          request {:body           {:text    "coucou !"
+                                    :company "caccccccccccccccccccccc1"
+                                    :user    "aaaaaaaaaaaaaaaaaaaaaaa2"}
+                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :request-method :post}
+          resp (handler request)]
+      (is (= 403 (:status resp)))))
+
+  (testing "create a comment should insert _created and _updated automatically"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments")
+          handler (:handler match)
+          request {:body           {:text    "coucou !"
+                                    :company "caccccccccccccccccccccc1"}
+                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :request-method :post}
+          resp (handler request)]
+      (is (instance? DateTime (get-in resp [:body :_created]))))))
+
+;(deftest update-resource
+;  (testing "update - validation fails"
+;    (load-fixtures)
+;    (let [id "aaaaaaaaaaaaaaaaaaaaaaa1"
+;          routes ["/" (build-resources-routes deps)]
+;          match (match-route routes (str "/users/" id))
+;          handler (:handler match)
+;          request (merge
+;                    {:request-method :put :auth {:auth_id id}}
+;                    (select-keys match [:route-params]))
+;          resp (handler request)]
+;      (clojure.pprint/pprint resp))))

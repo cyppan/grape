@@ -43,9 +43,10 @@
 (defn format-eve-response [response]
   (let [body (:body response)
         meta (if (:_count body)
-               {:total (:_count body)
+               {:total       (:_count body)
                 :max_results (get-in body [:query :paginate :per-page])
-                :page (get-in body [:query :paginate :page])})]
-    (-> body
-        (?> (:_documents body) (clojure.set/rename-keys {:_documents :_items}))
-        (?> meta (assoc :_meta meta)))))
+                :page        (get-in body [:query :paginate :page])})]
+    {:status (:status response)
+     :body   (-> body
+                 (?> (:_documents body) (clojure.set/rename-keys {:_documents :_items}))
+                 (?> meta (assoc :_meta meta)))}))
