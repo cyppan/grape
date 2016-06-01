@@ -44,8 +44,7 @@
   (testing "get resource handler"
     (load-fixtures)
     (let [resource {:url              "myresource"
-                    :resource-methods #{:get}
-                    :item-methods     #{:get}}
+                    :operations #{:read}}
           routes ["/" (build-resources-routes {:resources-registry {:myresource resource}})]
           resource-match (match-route routes "/myresource")
           item-match (match-route routes "/myresource/1234")]
@@ -56,8 +55,7 @@
   (testing "get resource handler with extra endpoints"
     (load-fixtures)
     (let [resource {:url              "myresource"
-                    :resource-methods #{:get}
-                    :item-methods     #{:get}
+                    :operations #{:read}
                     :extra-endpoints  [[["extra/" :param] identity]
                                        ["other" identity]]}
           routes ["/" (build-resource-routes {} resource)]

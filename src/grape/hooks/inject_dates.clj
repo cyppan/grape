@@ -4,4 +4,7 @@
 (def hooks
   {:pre-create-post-validate
    (fn [deps resource request payload]
-     (merge (or payload {}) {:_created (t/now)}))})
+     (merge (or payload {}) {:_created (t/now)}))
+   :pre-update-post-validate
+   (fn [deps resource request payload existing]
+     (merge (or payload {}) {:_updated (t/now)}))})

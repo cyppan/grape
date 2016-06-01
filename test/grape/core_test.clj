@@ -16,46 +16,46 @@
 
   (testing "fetching companies should inject auth filter"
     (let [request {:auth {:auth_id "caccccccccccccccccccccc1"}}
-          fetched (fetch-resource deps CompaniesResource request {})]
+          fetched (read-resource deps CompaniesResource request {})]
       (is (= "caccccccccccccccccccccc1" (get-in fetched [:_query :find :_id])))))
 
   (testing "query for public comments should not inject auth filter"
     (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
-          fetched (fetch-resource deps CommentsResource request {})]
+          fetched (read-resource deps CommentsResource request {})]
       (is (nil? (get-in fetched [:_query :find :_id])))))
 
   (testing "fetching comments with disabled soft delete should return soft delete"
     (load-fixtures)
     (let [query {:find {} :opts {:count? true}}
-          fetched (fetch-resource deps (dissoc CommentsResource :soft-delete) {} query)]
+          fetched (read-resource deps (dissoc CommentsResource :soft-delete) {} query)]
       (is (= 4 (count (:_documents fetched)) (:_count fetched)))))
 
   (testing "fetching comments with enabled soft delete should not return soft delete"
     (load-fixtures)
     (let [query {:find {} :opts {:count? true}}
-          fetched (fetch-resource deps CommentsResource {} query)]
+          fetched (read-resource deps CommentsResource {} query)]
       (is (= 3 (count (:_documents fetched)) (:_count fetched)))))
 
   (testing "fetching comments with enabled soft delete but explicitely querying for them should return soft delete"
     (load-fixtures)
     (let [query {:find {:_deleted true} :opts {:count? true}}
-          fetched (fetch-resource deps CommentsResource {} query)]
+          fetched (read-resource deps CommentsResource {} query)]
       (is (= 1 (count (:_documents fetched)) (:_count fetched)))))
 
   (testing "fetching comments with pagination"
     (load-fixtures)
     (let [query {:find {} :paginate {:per-page 2} :opts {:count? true}}
-          fetched (fetch-resource deps CommentsResource {} query)]
+          fetched (read-resource deps CommentsResource {} query)]
       (is (= 2 (count (:_documents fetched))))
       (is (= 3 (:_count fetched))))
     (let [query {:find {} :paginate {:per-page 2 :page 2} :opts {:count? true}}
-          fetched (fetch-resource deps CommentsResource {} query)]
+          fetched (read-resource deps CommentsResource {} query)]
       (is (= 1 (count (:_documents fetched))))
       (is (= 3 (:_count fetched)))))
 
   (testing "embedding users in comments"
     (load-fixtures)
-    (let [fetched (fetch-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
+    (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
       (doseq [i (take (count (:_documents fetched)) (range))]
         (is (= #{:_id :username}
                (-> fetched (get-in [:_documents i :user]) keys set))))))
@@ -64,11 +64,12 @@
     (load-fixtures)
     (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
           query {}
-          fetched (fetch-resource deps UsersResource request query)]
+          fetched (read-resource deps UsersResource request query)]
       (is (nil?
             (-> fetched :_documents first :password))))
     (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
           query {:fields [:password :username]}
-          fetched (fetch-resource deps UsersResource request query)]
+          fetched (read-resource deps UsersResource request query)]
       (is (nil?
-            (-> fetched :_documents first :password))))))
+            (-> fetched :_documents first :password)))))
+  )

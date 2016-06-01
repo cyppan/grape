@@ -12,7 +12,7 @@
             [grape.schema :refer [read-only Url Str resource-exists ?]]
             [monger.core :as mg]
             [monger.collection :as mc]
-            [grape.core :refer [fetch-item]])
+            [grape.core :refer [read-item]])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)))
 
@@ -35,108 +35,102 @@
   (store/->MongoDataSource db))
 
 (def CompaniesResource
-  {:datasource       {:source "companies"}
-   :schema           {(? :_id)                   ObjectId
-                      :name                      s/Str
-                      (? :domain)                s/Str
-                      (? :roles)                 (read-only [s/Str])
-                      (? :info)                  (s/maybe {:gender (s/enum :male :female)})
-                      (? :pages)                 [{:url         Url
-                                                   :description (Str 5 80)}]
-                      (s/optional-key :features) (s/maybe {:premium s/Bool})
-                      }
-   :url              "companies"
-   :resource-methods #{:post :get}
-   :public-methods   #{:post}
-   :item-methods     #{:get :put :patch :delete}
-   :auth-strategy    {:type       :field
-                      :auth-field :auth_id
-                      :doc-field  :_id}
-   :soft-delete      true
-   :relations        {:permissions {:type     :ref-field
-                                    :arity    :many
-                                    :path     [:permissions]
-                                    :resource :companies-permissions
-                                    :field    :company}
-                      :users       {:type :ref-field}}})
+  {:datasource        {:source "companies"}
+   :schema            {(? :_id)      ObjectId
+                       :name         s/Str
+                       (? :domain)   s/Str
+                       (? :roles)    (read-only [s/Str])
+                       (? :info)     (s/maybe {:gender (s/enum :male :female)})
+                       (? :pages)    [{:url         Url
+                                       :description (Str 5 80)}]
+                       (? :features) (s/maybe {:premium s/Bool})
+                       }
+   :url               "companies"
+   :operations        #{:create :read :update :delete}
+   :public-operations #{:create}
+   :auth-strategy     {:type       :field
+                       :auth-field :auth_id
+                       :doc-field  :_id}
+   :soft-delete       true
+   :relations         {:permissions {:type     :ref-field
+                                     :arity    :many
+                                     :path     [:permissions]
+                                     :resource :companies-permissions
+                                     :field    :company}
+                       :users       {:type :ref-field}}})
 
 (def UsersResource
-  {:datasource       {:source "users"}
-   :schema           {(? :_id)  ObjectId
-                      :company  (s/constrained ObjectId (resource-exists :companies) "resource-exists")
-                      :username #"^[A-Za-z0-9_ ]{2,25}$"
-                      :email    s/Str
-                      :password s/Str}
-   :fields           #{:_id :company :username :email}
-   :url              "users"
-   :resource-methods #{:post :get}
-   :public-methods   #{:post}
-   :item-methods     #{:get :put :patch :delete}
-   :auth-strategy    {:type       :field
-                      :auth-field :auth_id
-                      :doc-field  :_id}
-   :relations        {:permissions {:type     :ref-field
-                                    :arity    :many
-                                    :path     [:permissions]
-                                    :resource :users-permissions
-                                    :field    :user}
-                      :comments    {:type     :ref-field
-                                    :arity    :many
-                                    :path     [:comments]
-                                    :resource :comments
-                                    :field    :user}}
-   :extra-endpoints  [["me" (fn [deps resource request]
-                              (fetch-item deps resource request {}))]]})
+  {:datasource        {:source "users"}
+   :schema            {(? :_id)  ObjectId
+                       :company  (s/constrained ObjectId (resource-exists :companies) "resource-exists")
+                       :username #"^[A-Za-z0-9_ ]{2,25}$"
+                       :email    s/Str
+                       :password s/Str}
+   :fields            #{:_id :company :username :email}
+   :url               "users"
+   :operations        #{:create :read :update :delete}
+   :public-operations #{:create}
+   :auth-strategy     {:type       :field
+                       :auth-field :auth_id
+                       :doc-field  :_id}
+   :relations         {:permissions {:type     :ref-field
+                                     :arity    :many
+                                     :path     [:permissions]
+                                     :resource :users-permissions
+                                     :field    :user}
+                       :comments    {:type     :ref-field
+                                     :arity    :many
+                                     :path     [:comments]
+                                     :resource :comments
+                                     :field    :user}}
+   :extra-endpoints   [["me" (fn [deps resource request]
+                               (read-item deps resource request {}))]]})
 
 (def PublicUsersResource
-  {:datasource       {:source "users"}
-   :schema           {}
-   :fields           #{:_id :username}
-   :url              "public_users"
-   :resource-methods #{:get}
-   :public-methods   #{:get}})
+  {:datasource {:source "users"}
+   :schema     {}
+   :fields     #{:_id :username}
+   :url        "public_users"
+   :operations #{:read}})
 
 (def CompaniesPermissionsResource
-  {:datasource       {:source "permissions"}
-   :schema           {:_id     ObjectId
-                      :company ObjectId
-                      :user    ObjectId
-                      :roles   [s/Str]}
-   :url              "companies_permissions"
-   :resource-methods #{:post :get}
-   :item-methods     #{:get :put :patch :delete}
-   :auth-strategy    {:type       :field
-                      :auth-field :auth_id
-                      :doc-field  :account}})
+  {:datasource    {:source "permissions"}
+   :schema        {:_id     ObjectId
+                   :company ObjectId
+                   :user    ObjectId
+                   :roles   [s/Str]}
+   :url           "companies_permissions"
+   :operations    #{:create :read :update :delete}
+   :auth-strategy {:type       :field
+                   :auth-field :auth_id
+                   :doc-field  :account}})
 
 (def UsersPermissionsResource
   (merge CompaniesPermissionsResource
-         {:url              "users_permissions"
-          :resource-methods #{:get}
-          :item-methods     #{:get :delete}
-          :auth-strategy    {:type       :field
-                             :auth-field :auth_id
-                             :doc-field  :user}}))
+         {:url           "users_permissions"
+          :operations    #{:read :delete}
+          :auth-strategy {:type       :field
+                          :auth-field :auth_id
+                          :doc-field  :user}}))
 
 (def CommentsResource
-  {:datasource       {:source "comments"}
-   :schema           {(? :_id)      ObjectId
-                      :user         ObjectId
-                      :company      ObjectId
-                      :text         s/Str
-                      (? :_created) (read-only DateTime)
-                      (? :_updated) (read-only DateTime)}
-   :url              "comments"
-   :resource-methods #{:post :get :delete}
-   :item-methods     #{:get :put :patch :delete}
-   :public-methods   #{:get}
-   :auth-strategy    {:type       :field
-                      :auth-field :auth_id
-                      :doc-field  :user}
-   :relations        {:user {:type     :embedded
-                             :path     [:user]
-                             :resource :public-users}}
-   :soft-delete      true})
+  {:datasource        {:source "comments"}
+   :schema            {(? :_id)      ObjectId
+                       :user         ObjectId
+                       :company      ObjectId
+                       :text         s/Str
+                       (? :_created) (read-only DateTime)
+                       (? :_updated) (read-only DateTime)}
+   :url               "comments"
+   :operations        #{:create :read :update :delete}
+   :public-operations #{:read}
+   :auth-strategy     {:type       :field
+                       :auth-field :auth_id
+                       :doc-field  :user}
+   :relations         {:user {:type     :embedded
+                              :path     [:user]
+                              :resource :public-users}}
+   :soft-delete       true})
 
 (def hooks
   (compose-hooks auth-field-hooks

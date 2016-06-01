@@ -1,5 +1,5 @@
 (ns grape.store
-  (:refer-clojure :exclude [update count])
+  (:refer-clojure :exclude [update count read])
   (:require [plumbing.core :refer :all]
             [monger.collection :as mc]
             [monger.query :as mq]
@@ -9,7 +9,7 @@
   (:import (org.bson.types ObjectId)))
 
 (defprotocol DataSource
-  (fetch [_ source query opts])
+  (read [_ source query opts])
   (count [_ source query opts])
   (insert [_ source document])
   (partial-update [_ source id document])
@@ -18,7 +18,7 @@
 
 (defrecord MongoDataSource [db]
   DataSource
-  (fetch [_ source {:keys [find fields paginate sort] :as query} {:keys [soft-delete?] :as opts}]
+  (read [_ source {:keys [find fields paginate sort] :as query} {:keys [soft-delete?] :as opts}]
     (let [find (if soft-delete?
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
                  find)

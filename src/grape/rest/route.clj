@@ -14,14 +14,18 @@
         private? (and
                    (:auth-strategy resource)
                    (condp = method
-                     :post (not (:post (into #{} (:public-methods resource))))
-                     :get (not (:get (into #{} (:public-methods resource))))
-                     :put (not (:put (into #{} (:public-methods resource))))
-                     :patch (not (:patch (into #{} (:public-methods resource))))
-                     :delete (not (:delete (into #{} (:public-methods resource))))))
-        allowed-method? (if item-method?
-                          (method (:item-methods resource #{}))
-                          (method (:resource-methods resource #{})))]
+                     :post (not (:create (into #{} (:public-operations resource))))
+                     :get (not (:get (into #{} (:public-operations resource))))
+                     :put (not (:put (into #{} (:public-operations resource))))
+                     :patch (not (:patch (into #{} (:public-operations resource))))
+                     :delete (not (:delete (into #{} (:public-operations resource))))))
+        allowed-method? (or
+                          (and item-method? (= :get method) (:read (:operations resource #{})))
+                          (and item-method? (= :put method) (:update (:operations resource #{})))
+                          (and item-method? (= :patch method) (:update (:operations resource #{})))
+                          (and item-method? (= :delete method) (:delete (:operations resource #{})))
+                          (and resource-method? (= :get method) (:read (:operations resource #{})))
+                          (and resource-method? (= :post method) (:create (:operations resource #{}))))]
     (try
       (cond
         (not allowed-method?)
@@ -32,13 +36,13 @@
         (->> request
              parse-query
              (#(update-in % [:opts] (fn [opts] (merge opts {:count? true}))))
-             (fetch-resource deps resource request)
+             (read-resource deps resource request)
              (assoc {:status 200} :body)
              format-eve-response)
         (and item-method? (= method :get))
         (->> request
              parse-query
-             (fetch-item deps resource request)
+             (read-item deps resource request)
              (assoc {:status 200} :body)
              format-eve-response)
         (and resource-method? (= method :post))
@@ -47,21 +51,22 @@
                (assoc {:status 201} :body)
                format-eve-response))
         (and item-method? (= method :put))
-        (let [payload (merge (:body request {}) (:route-params request))]
-          (->> (update-resource deps resource request payload)
-               (assoc {:status 201} :body)
+        (let [find (:route-params request)
+              payload (merge (:body request {}) find)]
+          (->> (update-resource deps resource request find payload)
+               (assoc {:status 200} :body)
                format-eve-response))
         (and item-method? (= method :patch))
-        (let [payload (merge (:body request {}) (:route-params request))]
-          (->> (create-resource deps resource request payload)
-               (assoc {:status 201} :body)
+        (let [find (:route-params request)
+              payload (merge (:body request {}) find)]
+          (->> (partial-update-resource deps resource request find payload)
+               (assoc {:status 200} :body)
                format-eve-response))
         (and item-method? (= method :delete))
-        (let [payload (merge (:body request {}) (:route-params request))]
-          (->> (create-resource deps resource request payload)
-               (assoc {:status 201} :body)
-               format-eve-response))
-        )
+        (let [find (:route-params request)]
+          (->> (delete-resource deps resource request find)
+               (assoc {:status 200} :body)
+               format-eve-response)))
       (catch ExceptionInfo ex
         (condp = (:type (ex-data ex))
           :unauthorized {:status 401}
