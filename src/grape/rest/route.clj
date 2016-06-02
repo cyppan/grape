@@ -4,7 +4,8 @@
             [grape.rest.parser :refer [parse-query format-eve-response]]
             [grape.query :refer [validate-query]]
             [grape.schema :refer [validate-create validate-update validate-partial-update]]
-            [plumbing.core :refer :all])
+            [plumbing.core :refer :all]
+            [bidi.ring :refer (make-handler)])
   (:import (clojure.lang ExceptionInfo)))
 
 (defn rest-resource-handler [deps resource request]
@@ -85,8 +86,14 @@
                     [route-path (fn [request]
                                   (->> (handler deps resource request)
                                        (assoc {:status 200} :body)
-                                      (format-eve-response)))])))))
+                                       (format-eve-response)))])))))
 
 (defn build-resources-routes [{:keys [resources-registry] :as deps}]
   (let [resources (for [[_ resource] resources-registry] resource)]
     (mapcat identity (map (partial build-resource-routes deps) resources))))
+
+(defn handler-builder
+  ([deps]
+   (handler-builder deps "/"))
+  ([deps prefix]
+    (make-handler [prefix (build-resources-routes deps)])))

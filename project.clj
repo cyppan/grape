@@ -15,6 +15,8 @@
                  [bidi "2.0.9"]
                  [org.clojure/core.async "0.2.374"]
                  [slingshot "0.12.2"]
-                 [com.taoensso/timbre "4.3.1"]
-                 [org.slf4j/slf4j-nop "1.7.21"]]
+                 [org.clojure/tools.logging "0.3.1"]
+                 [com.stuartsierra/component "0.3.1"]
+                 [http-kit "2.1.18"]
+                 [com.auth0/java-jwt "2.1.0"]]
   :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]])

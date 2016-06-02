@@ -65,8 +65,8 @@
     (merge (dissoc query :relations)
            {:relations (apply merge (for [[relation-key relation-q] relations
                                           :let [relation-spec (get-in resource [:relations relation-key])
-                                                relation-res ((:resource relation-spec) resources-registry)
-                                                embedded? (= :embedded (:type relation-spec))
+                                                relation-res (when relation-spec ((:resource relation-spec) resources-registry))
+                                                embedded? (when relation-spec (= :embedded (:type relation-spec)))
                                                 relation-q (if embedded?
                                                              (merge relation-q {:opts {:count?    false
                                                                                        :paginate? false

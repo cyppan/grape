@@ -12,7 +12,7 @@
             [clj-time.core :as t]
             [clj-time.format :as f]
             [grape.hooks.core :refer [compose-hooks]]
-            [taoensso.timbre :refer [log]])
+            [clojure.tools.logging :refer [log]])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)
            (clojure.lang ExceptionInfo)

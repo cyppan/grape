@@ -1,12 +1,7 @@
 (ns grape.system-test
   (:require [grape.store :as store]
             [schema.core :as s]
-            [grape.hooks.auth-field :refer [hooks] :rename {hooks auth-field-hooks}]
-            [grape.hooks.default-sort :refer [hooks] :rename {hooks default-sort-hooks}]
-            [grape.hooks.restricts-fields :refer [hooks] :rename {hooks restrict-fields-hooks}]
-            [grape.hooks.inject-pagination :refer [hooks] :rename {hooks inject-pagination-hooks}]
-            [grape.hooks.inject-dates :refer [hooks] :rename {hooks inject-dates-hooks}]
-            [grape.hooks.core :refer [compose-hooks]]
+            [grape.hooks.core :refer [hooks]]
             [schema.spec.core :as spec]
             [schema.spec.leaf :as leaf]
             [grape.schema :refer [read-only Url Str resource-exists ?]]
@@ -32,7 +27,7 @@
                               {:_id (ObjectId. "ccccccccccccccccccccccc4") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :company (ObjectId. "caccccccccccccccccccccc1") :text "has been deleted" :_deleted true}]})
 
 (def store-inst
-  (store/->MongoDataSource db))
+  (store/map->MongoDataSource {:db db}))
 
 (def CompaniesResource
   {:datasource        {:source "companies"}
@@ -131,13 +126,6 @@
                               :path     [:user]
                               :resource :public-users}}
    :soft-delete       true})
-
-(def hooks
-  (compose-hooks auth-field-hooks
-                 default-sort-hooks
-                 restrict-fields-hooks
-                 inject-pagination-hooks
-                 inject-dates-hooks))
 
 (def config {:default-paginate {:per-page 10}
              :default-sort     {:sort {:_created -1}}})

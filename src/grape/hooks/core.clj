@@ -1,4 +1,9 @@
-(ns grape.hooks.core)
+(ns grape.hooks.core
+  (:require [grape.hooks.auth-field :refer [hooks] :rename {hooks auth-field-hooks}]
+            [grape.hooks.default-sort :refer [hooks] :rename {hooks default-sort-hooks}]
+            [grape.hooks.inject-dates :refer [hooks] :rename {hooks inject-dates-hooks}]
+            [grape.hooks.restricts-fields :refer [hooks] :rename {hooks restrict-fields-hooks}]
+            [grape.hooks.inject-pagination :refer [hooks] :rename {hooks inject-pagination-hooks}]))
 
 (def no-op-4
   (fn [deps resource request arg]
@@ -42,3 +47,9 @@
    :pre-delete               (gen-hook-fn-4 hooks :pre-delete)
    :post-delete              (gen-hook-fn-4 hooks :post-delete)
    :post-delete-async        (gen-hook-fn-4 hooks :post-delete-async)})
+
+(def hooks (compose-hooks auth-field-hooks
+                          default-sort-hooks
+                          inject-dates-hooks
+                          restrict-fields-hooks
+                          inject-pagination-hooks))

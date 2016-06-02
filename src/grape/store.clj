@@ -5,7 +5,11 @@
             [monger.query :as mq]
             [monger.util :refer :all]
             monger.joda-time
-            monger.json)
+            monger.json
+            [clojure.tools.logging :as log]
+            [com.stuartsierra.component :as component]
+            [monger.core :as mg]
+            [schema.core :as s])
   (:import (org.bson.types ObjectId)))
 
 (defprotocol DataSource
@@ -16,7 +20,20 @@
   (update [_ source id document])
   (delete [_ source id opts]))
 
-(defrecord MongoDataSource [db]
+;;;;;;;;;;;;;;;;;;;;;;;
+;; # Types definitions
+;;;;;;;;;;;;;;;;;;;;;;;
+
+(def MongoDbConfig {:uri s/Str})
+
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Actual component
+;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defrecord MongoDataSource [;; construction parameters
+                            uri
+                            ;; constructed on start
+                            conn db]
   DataSource
   (read [_ source {:keys [find fields paginate sort] :as query} {:keys [soft-delete?] :as opts}]
     (let [find (if soft-delete?
@@ -49,4 +66,23 @@
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
       (if soft-delete?
         (partial-update self source id {:_deleted true})
-        (mc/remove db source {:_id coerced})))))
+        (mc/remove db source {:_id coerced}))))
+
+  component/Lifecycle
+  (start [this]
+    (log/info "starting MongoDB database")
+    (if (:conn this)
+      this
+      (let [{:keys [conn db]} (mg/connect-via-uri uri)]
+        (assoc this :conn conn :db db))))
+
+  (stop [this]
+    (log/info "stopping MongoDB database")
+    (if (:conn this)
+      (do
+        (mg/disconnect (:conn this))
+        (assoc this :conn nil :db nil))
+      this)))
+
+(s/defn ^:always-validate new-mongo-datasource [config :- MongoDbConfig]
+  (map->MongoDataSource config))

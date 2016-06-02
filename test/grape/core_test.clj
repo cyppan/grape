@@ -7,6 +7,10 @@
             [grape.system-test :refer :all])
   (:import (clojure.lang ExceptionInfo)))
 
+;; TODO test relations not existing
+;; TODO test pagination null
+;; TODO check why fields are not injected
+
 (deftest integration
 
   (testing "badly formatted query should fail to validate"
