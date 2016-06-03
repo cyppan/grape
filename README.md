@@ -6,7 +6,7 @@
 [![Dependencies Status](https://jarkeeper.com/cyppan/grape/status.svg)](https://jarkeeper.com/cyppan/grape)
 
 A Clojure library designed to build data-first APIs.
-This library is a work in progress.
+This library is a work in progress, stay tuned ;)
 
 ## Features
 
@@ -24,12 +24,33 @@ A resource corresponds generally to a MongoDB collection, it's a dictionary
 
 This library is highly functional and you can easily add features around your resources
 using hooks on:
-* pre-fetch: to map the query
-* post-fetch: to modify the fetched documents
+* pre-read: to map the query
+* post-read: to modify the fetched documents
+* pre-create-pre-validate: the payload has been parsed, but occurs before the validation
+* pre-create-post-validate: the payload has been parsed and the document validated and coerced
+* post-create: after being inserted into the database, synchronous (you can map the result)
+* post-create-async: after being inserted into the database, asynchronous (used to feed the oplog for example)
+* pre-update-pre-validate: either for update or partial update
+* pre-update-post-validate
+* post-update
+* post-update-async
+* pre-delete
+* post-delete
+* post-delete-async
+
+**Hooks use cases:** 
+* Synchronize a secondary database (like an Elastic Search)
+* Increment counters (that comment has n like)
+* Denormalize your data (Maintain an array of the 3 last replies for a comment to ensure efficient comments fetching)
+* Map the users fetched to inject a Facebook graph url for their avatar
+* Perform complex validation involving multiple fields / collections
 * ...
 
-From that resources configurations Grape will expose on demand 
-a fully functional REST API (Done), and a Relay-compliant GraphQL Server (TODO)
+From that resources configurations Grape will expose on demand: 
+* A fully functional REST API (Done)
+* A real time subscription end-point as a websocket (TODO)
+* A Relay-compliant GraphQL Server (TODO)
+* A Falcor backend (TODO)
 
 **Examples:**
 
