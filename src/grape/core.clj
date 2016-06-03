@@ -7,7 +7,15 @@
             [plumbing.core :refer :all]
             [clojure.core.match :refer [match]]
             [plumbing.graph :as graph]
-            [grape.query :refer [validate-query]]))
+            [grape.query :refer [validate-query]]
+            [cheshire.generate :refer [add-encoder encode-str remove-encoder]]
+            [clj-time.format :as f])
+  (:import (org.joda.time DateTime)))
+
+(add-encoder DateTime (fn [d jsonGenerator]
+                        (let [formatter (f/formatters :date-time)
+                              s (f/unparse formatter d)]
+                          (.writeString jsonGenerator s))))
 
 (declare read-resource)
 
@@ -121,7 +129,7 @@
   (let [hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
         ((juxt :pre-update-pre-validate :pre-update-post-validate :post-update :post-update-async) hooks)
-        existing (read-item deps resource request find)]
+        existing (read-item deps resource request {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))
                        (validate-update deps resource request) ;; let the validation exception throw to the caller
@@ -129,29 +137,29 @@
                        (update store (get-in resource [:datasource :source]) (:_id payload))
                        (#(post-update-fn deps resource request % existing)))]
       (future (post-update-async-fn deps resource request updated existing))
-      update)))
+      updated)))
 
 (defn partial-update-resource [{:keys [store hooks] :as deps} resource request find payload]
   (let [hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
         ((juxt :pre-update-pre-validate :pre-update-post-validate :post-update :post-update-async) hooks)
-        existing (read-item deps resource request find)]
+        existing (read-item deps resource request {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))
-                       (validate-update deps resource request) ;; let the validation exception throw to the caller
+                       (validate-partial-update deps resource request) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
                        (partial-update store (get-in resource [:datasource :source]) (:_id payload))
                        (#(post-update-fn deps resource request % existing)))]
       (future (post-update-async-fn deps resource request updated existing))
-      update)))
+      updated)))
 
 (defn delete-resource [{:keys [store hooks] :as deps} resource request find]
   (let [hooks (compose-hooks hooks resource)
         [pre-delete-fn post-delete-fn post-delete-async-fn]
         ((juxt :pre-delete :post-delete :post-delete-async) hooks)
-        existing (read-item deps resource request find)]
+        existing (read-item deps resource request {:find find})]
     (->> (pre-delete-fn deps resource request existing)
-         (delete store (get-in resource [:datasource :source]) find)
+         (delete store (get-in resource [:datasource :source]) (:_id find))
          (post-delete-fn deps resource request existing))
     (future (post-delete-async-fn deps resource request existing))
     existing))

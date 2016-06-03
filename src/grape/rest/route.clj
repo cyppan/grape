@@ -67,7 +67,8 @@
         (let [find (:route-params request)]
           (->> (delete-resource deps resource request find)
                (assoc {:status 200} :body)
-               format-eve-response)))
+               format-eve-response))
+        :else {:status 404})
       (catch ExceptionInfo ex
         (condp = (:type (ex-data ex))
           :unauthorized {:status 401}
@@ -81,7 +82,7 @@
   (let [extra-endpoints (:extra-endpoints resource {})]
     (into []
           (concat [[(:url resource) (partial rest-resource-handler deps resource)]
-                   [[(str (:url resource) "/") :_id] (partial rest-resource-handler deps resource)]]
+                   [[(:url resource) "/" :_id] (partial rest-resource-handler deps resource)]]
                   (for [[route-path handler] extra-endpoints]
                     [route-path (fn [request]
                                   (->> (handler deps resource request)
@@ -96,4 +97,4 @@
   ([deps]
    (handler-builder deps "/"))
   ([deps prefix]
-    (make-handler [prefix (build-resources-routes deps)])))
+   (make-handler [prefix (build-resources-routes deps)])))

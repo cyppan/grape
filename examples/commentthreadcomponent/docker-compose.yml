@@ -1,0 +1,6 @@
+mongodb:
+  image: tutum/mongodb:3.0
+  ports:
+    - "27017:27017"
+  environment:
+    - AUTH=no

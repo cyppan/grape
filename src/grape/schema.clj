@@ -29,17 +29,21 @@
   {:en {"missing-required-key" "the field is required"
         "disallowed-key"       "extra fields not allowed"
         "type-invalid"         "invalid type"
+        "url-invalid"          "invalid url"
         "read-only"            "the field is read-only"
         "resource-exists"      "the resource should exist"
         #"min-length-([0-9]+)" "minimum length is %s"
-        #"max-length-([0-9]+)" "maximum length is %s"}
+        #"max-length-([0-9]+)" "maximum length is %s"
+        #"str-length-([0-9]+)-([0-9]+)" "string length should be between %s and %s characters long"}
    :fr {"missing-required-key" "le champ est requis"
         "disallowed-key"       "les champs supplémentaires ne sont pas autorisés"
         "type-invalid"         "type invalide"
+        "url-invalid"          "url invalide"
         "read-only"            "le champ est en lecture seule"
         "resource-exists"      "la ressource doit exister"
         #"min-length-([0-9]+)" "la longueur minimum est %s"
-        #"max-length-([0-9]+)" "la longueur maximum est %s"}})
+        #"max-length-([0-9]+)" "la longueur maximum est %s"
+        #"str-length-([0-9]+)-([0-9]+)" "le texte doit faire entre %s et %s caractères"}})
 
 (defn translate-error [err]
   (let [{:keys [config translations]} *deps*
@@ -87,12 +91,22 @@
 
 (def ? s/optional-key)
 
-(defn Str [min max]
-  (s/constrained s/Str
+(defn Sized [s min max]
+  (s/constrained s
                  #(<= min (count %) max)
-                 (str "str-length-" min "-" max)))
+                 (str "length-" min "-" max)))
 
-(def Url #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&\'()*+,#;=.~_-]*)?$")
+(defn Str [min max]
+  (Sized s/Str min max))
+
+(defn Regex [pattern error-key]
+  (s/constrained s/Str
+                 #(re-matches pattern %)
+                 error-key))
+
+(def Url (Regex
+           #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&\'()*+,#;=.~_-]*)?$"
+           "url-invalid"))
 
 (def object-id-matcher
   {ObjectId (coerce/safe #(object-id ^String %))})
@@ -128,6 +142,11 @@
                (translate-error (:post-name (.-schema el)))
                (symbol? el)
                (translate-error (str el))
+               (and (instance? ValidationError el)
+                    (= (.-fail-explanation el) 'not))
+               (str (.-schema el))
+               (instance? ValidationError el)
+               (s/explain (.-schema el))
                :else el))
            error)})
 
