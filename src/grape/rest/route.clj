@@ -5,7 +5,8 @@
             [grape.query :refer [validate-query]]
             [grape.schema :refer [validate-create validate-update validate-partial-update]]
             [plumbing.core :refer :all]
-            [bidi.ring :refer (make-handler)])
+            [bidi.ring :refer (make-handler)]
+            [clojure.tools.logging :as log])
   (:import (clojure.lang ExceptionInfo)))
 
 (defn rest-resource-handler [deps resource request]
@@ -16,9 +17,9 @@
                    (:auth-strategy resource)
                    (condp = method
                      :post (not (:create (into #{} (:public-operations resource))))
-                     :get (not (:get (into #{} (:public-operations resource))))
-                     :put (not (:put (into #{} (:public-operations resource))))
-                     :patch (not (:patch (into #{} (:public-operations resource))))
+                     :get (not (:read (into #{} (:public-operations resource))))
+                     :put (not (:update (into #{} (:public-operations resource))))
+                     :patch (not (:update (into #{} (:public-operations resource))))
                      :delete (not (:delete (into #{} (:public-operations resource))))))
         allowed-method? (or
                           (and item-method? (= :get method) (:read (:operations resource #{})))
@@ -70,13 +71,19 @@
                format-eve-response))
         :else {:status 404})
       (catch ExceptionInfo ex
-        (condp = (:type (ex-data ex))
-          :unauthorized {:status 401}
-          :not-found {:status 404}
-          :validation-failed {:status 422 :body (:error (ex-data ex))}
-          :forbidden {:status 403}
-          (do (prn (.getMessage ex) (ex-data ex))
-              {:status 500 :body {:_status "ERR" :_message "an unexpected error occured"}}))))))
+        (try
+          (condp = (:type (ex-data ex))
+            :unauthorized {:status 401}
+            :not-found {:status 404}
+            :validation-failed {:status 422 :body (:error (ex-data ex))}
+            :forbidden {:status 403}
+            (do (prn (.getMessage ex) (ex-data ex))
+                {:status 500 :body {:_status "ERR" :_message "an unexpected error occured"}}))
+          (catch Exception e (log/info e) {:status 500}))
+        )
+      (catch Exception e
+        (log/info e)
+        {:status 500 :body {:_status "ERR" :_message "an unexpected error occured"}}))))
 
 (defn build-resource-routes [deps resource]
   (let [extra-endpoints (:extra-endpoints resource {})]

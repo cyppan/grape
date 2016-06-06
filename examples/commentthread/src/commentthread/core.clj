@@ -1,18 +1,18 @@
 (ns commentthread.core
-    (:require [monger.core :as mg]
-      [grape.hooks.core :refer [hooks]]
-      [grape.schema :refer :all]
-      [schema.core :as s]
-      [grape.rest.route :refer [handler-builder]]
-      [grape.store :refer [map->MongoDataSource]]
-      [grape.http :refer [wrap-jwt-auth]]
-      [ring.adapter.jetty :refer [run-jetty]]
-      [ring.middleware.params :refer [wrap-params]]
-      [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
-      [ring.middleware.cors :refer [wrap-cors]])
-    (:import (org.joda.time DateTime)
-      (org.bson.types ObjectId))
-    (:gen-class))
+  (:require [monger.core :as mg]
+            [grape.hooks.core :refer [hooks]]
+            [grape.schema :refer :all]
+            [schema.core :as s]
+            [grape.rest.route :refer [handler-builder]]
+            [grape.store :refer [map->MongoDataSource]]
+            [grape.http :refer [wrap-jwt-auth]]
+            [ring.adapter.jetty :refer [run-jetty]]
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
+            [ring.middleware.cors :refer [wrap-cors]])
+  (:import (org.joda.time DateTime)
+           (org.bson.types ObjectId))
+  (:gen-class))
 
 (def db (mg/get-db (mg/connect) "commentthread"))
 
@@ -66,6 +66,16 @@
                        :auth-field :user-id
                        :doc-field  :user}})
 
+(def OplogResource
+  {:datasource {:source "oplog"}
+   :url        "oplog"
+   :schema     {}
+   :operations #{:read}
+   :fields     #{:_id :o :s :i :c :af :auth :at}
+   :auth-strategy {:type :field
+                   :auth-field :user-id
+                   :doc-field :af}})
+
 (def deps {:config             {:default-language "fr"      ;; Errors are translated
                                 :jwt              {:audience "api"
                                                    :secret   "secret"}}
@@ -74,7 +84,8 @@
            :resources-registry {:users        UsersResource
                                 :public-users PublicUsersResource
                                 :comments     CommentsResource
-                                :likes        LikesResource}})
+                                :likes        LikesResource
+                                :oplog        OplogResource}})
 
 (def grape-handler
   (-> (handler-builder deps)
@@ -85,4 +96,4 @@
       wrap-params))
 
 (defn -main [& args]
-      (run-jetty grape-handler {:port 3000}))
+  (run-jetty grape-handler {:port 3000}))

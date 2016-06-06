@@ -142,7 +142,7 @@
 (defn partial-update-resource [{:keys [store hooks] :as deps} resource request find payload]
   (let [hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
-        ((juxt :pre-update-pre-validate :pre-update-post-validate :post-update :post-update-async) hooks)
+        ((juxt :pre-partial-update-pre-validate :pre-partial-update-post-validate :post-partial-update :post-partial-update-async) hooks)
         existing (read-item deps resource request {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))

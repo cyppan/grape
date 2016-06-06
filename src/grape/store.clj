@@ -20,15 +20,15 @@
   (update [_ source id document])
   (delete [_ source id opts]))
 
-;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Types definitions
-;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def MongoDbConfig {:uri s/Str})
 
-;;;;;;;;;;;;;;;;;;;;;;;;
-;; # Actual component
-;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # MongoDB DataSource Implementation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defrecord MongoDataSource [;; construction parameters
                             uri
@@ -59,11 +59,11 @@
   (partial-update [self source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
       (mc/update db source {:_id coerced} {"$set" document})
-      (read self source {:find {:_id id}} {})))
+      document))
   (update [self source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
       (mc/update db source {:_id coerced} document)
-      (read self source {:find {:_id id}} {})))
+      document))
   (delete [self source id {:keys [soft-delete?] :as opts}]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
       (if soft-delete?
