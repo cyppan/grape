@@ -103,7 +103,7 @@
           handler (:handler match)
           request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc9")
                                                      :username "me"
-                                                     :email    "coucou"
+                                                     :email    "coucou@coucou.com"
                                                      :password "secret"} :request-method :post}
           resp (handler request)]
       (is (= 422 (:status resp)))
@@ -117,7 +117,7 @@
           handler (:handler match)
           request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc1")
                                                      :username "me"
-                                                     :email    "coucou"
+                                                     :email    "coucou@coucou.com"
                                                      :password "secret"} :request-method :post}
           resp (handler request)
           inserted-id (get-in resp [:body :_id])]

@@ -10,19 +10,23 @@
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [ring.middleware.cors :refer [wrap-cors]])
-  (:import (org.joda.time DateTime)
-           (org.bson.types ObjectId))
   (:gen-class))
 
 (def db (mg/get-db (mg/connect) "commentthread"))
 
 (def UsersResource
   {:datasource        {:source "users"}
-   :schema            {(? :_id)      ObjectId
-                       :username     #"^[A-Za-z0-9_ ]{2,25}$"
-                       (? :website)  (s/maybe Url)
-                       (? :_created) (read-only DateTime)
-                       (? :_updated) (read-only DateTime)}
+   :schema            {(? :_id)   ObjectId
+                       (? :index) (Field Int
+                                         [[#(<= 0 % 10) "length-0-10"]
+                                          [even? "should-be-even"]])
+                       :username  #"^[A-Za-z0-9_ ]{2,25}$"
+                       (? :website)
+                                  (s/maybe UrlField)
+                       (? :_created)
+                                  (read-only DateTime)
+                       (? :_updated)
+                                  (read-only DateTime)}
    :url               "users"
    :operations        #{:create :read :update :delete}
    :public-operations #{:create}
@@ -41,7 +45,7 @@
 (def CommentsResource
   {:datasource        {:source "comments"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists :users) "resource-exists")
+                       :user         (s/constrained ObjectId (resource-exists? :users) "resource-exists")
                        :text         s/Str
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
@@ -55,8 +59,8 @@
 (def LikesResource
   {:datasource        {:source "likes"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists :users) "resource-exists")
-                       :comment      (s/constrained ObjectId (resource-exists :comments) "resource-exists")
+                       :user         (s/constrained ObjectId (resource-exists? :users) "resource-exists")
+                       :comment      (s/constrained ObjectId (resource-exists? :comments) "resource-exists")
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "likes"
@@ -67,18 +71,20 @@
                        :doc-field  :user}})
 
 (def OplogResource
-  {:datasource {:source "oplog"}
-   :url        "oplog"
-   :schema     {}
-   :operations #{:read}
-   :fields     #{:_id :o :s :i :c :af :auth :at}
-   :auth-strategy {:type :field
+  {:datasource    {:source "oplog"}
+   :url           "oplog"
+   :schema        {}
+   :operations    #{:read}
+   :fields        #{:_id :o :s :i :c :af :auth :at}
+   :auth-strategy {:type       :field
                    :auth-field :user-id
-                   :doc-field :af}})
+                   :doc-field  :af}})
 
 (def deps {:config             {:default-language "fr"      ;; Errors are translated
                                 :jwt              {:audience "api"
                                                    :secret   "secret"}}
+           :translations       {:en {"should-be-even" "the field should be even"}
+                                :fr {"should-be-even" "le champ doit être pair"}}
            :hooks              hooks
            :store              (map->MongoDataSource {:db db})
            :resources-registry {:users        UsersResource

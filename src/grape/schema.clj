@@ -13,9 +13,7 @@
             [clj-time.format :as f]
             [grape.hooks.core :refer [compose-hooks]]
             [clojure.tools.logging :refer [log]])
-  (:import (org.bson.types ObjectId)
-           (org.joda.time DateTime)
-           (clojure.lang ExceptionInfo)
+  (:import (clojure.lang ExceptionInfo ISeq)
            (schema.utils ValidationError)
            (schema.core Predicate Constrained)
            (java.util UnknownFormatConversionException)
@@ -26,24 +24,26 @@
 (def ^:dynamic *request* {})
 
 (def errors-translations
-  {:en {"missing-required-key" "the field is required"
-        "disallowed-key"       "extra fields not allowed"
-        "type-invalid"         "invalid type"
-        "url-invalid"          "invalid url"
-        "read-only"            "the field is read-only"
-        "resource-exists"      "the resource should exist"
-        #"min-length-([0-9]+)" "minimum length is %s"
-        #"max-length-([0-9]+)" "maximum length is %s"
-        #"str-length-([0-9]+)-([0-9]+)" "string length should be between %s and %s characters long"}
-   :fr {"missing-required-key" "le champ est requis"
-        "disallowed-key"       "les champs supplémentaires ne sont pas autorisés"
-        "type-invalid"         "type invalide"
-        "url-invalid"          "url invalide"
-        "read-only"            "le champ est en lecture seule"
-        "resource-exists"      "la ressource doit exister"
-        #"min-length-([0-9]+)" "la longueur minimum est %s"
-        #"max-length-([0-9]+)" "la longueur maximum est %s"
-        #"str-length-([0-9]+)-([0-9]+)" "le texte doit faire entre %s et %s caractères"}})
+  {:en {"missing-required-key"         "the field is required"
+        "disallowed-key"               "extra fields not allowed"
+        "type-invalid"                 "invalid type"
+        "type-should-be-(.*)"          "The field should be of type %s"
+        "url-should-be-valid"          "the url should be valid"
+        "read-only"                    "the field is read-only"
+        "resource-should-exist"        "the resource should exist"
+        "email-should-be-valid"        "the email should be valid"
+        #"length-([0-9]+)-([0-9]+)"    "field length should be between %s and %s characters long"
+        #"value-should-be-one-of-(.*)" "the value should be one of %s"}
+   :fr {"missing-required-key"         "le champ est requis"
+        "disallowed-key"               "les champs supplémentaires ne sont pas autorisés"
+        "type-invalid"                 "type invalide"
+        "type-should-be-(.*)"          "Le champ doit être de type %s"
+        "url-should-be-valid"          "L'url doit être valide"
+        "read-only"                    "le champ est en lecture seule"
+        "resource-should-exist"        "la ressource doit exister"
+        "email-should-be-valid"        "l'email doit être valide"
+        #"length-([0-9]+)-([0-9]+)"    "le champ doit faire entre %s et %s caractères"
+        #"value-should-be-one-of-(.*)" "la valeur doit être l'une des valeurs suivantes : %s"}})
 
 (defn translate-error [err]
   (let [{:keys [config translations]} *deps*
@@ -72,7 +72,25 @@
           err))
       err)))
 
-(defn resource-exists [resource-key]
+;; Here we redefine schema primitives using predicates instead of raw types to be able to attach
+;; Clojure metadata to fields (useful for relationship declaration)
+;; TODO ClojureScript compat'
+(def Int (vary-meta (s/pred integer? "type-should-be-integer") assoc :grape/type 'Int))
+(def Num (vary-meta (s/pred number? "type-should-be-number") assoc :grape/type 'Num))
+(def Str (vary-meta (s/pred string? "type-should-be-string") assoc :grape/type 'Str))
+(def Bool (vary-meta (s/pred #(instance? Boolean %) "type-should-be-boolean") assoc :grape/type 'Bool))
+(def DateTime (vary-meta (s/pred #(instance? org.joda.time.DateTime %) "type-should-be-date-time") assoc :grape/type 'DateTime))
+(def ObjectId (vary-meta (s/pred #(instance? org.bson.types.ObjectId %) "type-should-be-object-id") assoc :grape/type 'ObjectId))
+
+(defn Field
+  ([type]
+   type)
+  ([type valid? ^String error-key]
+   (vary-meta (s/constrained type valid? error-key) merge (meta type)))
+  ([type ^ISeq validation-pairs]
+   (vary-meta (apply s/both (map #(Field type (first %) (second %)) validation-pairs)) merge (meta type))))
+
+(defn resource-exists? [resource-key]
   (fn [id]
     (let [resource (resource-key (:resources-registry *deps*))
           deps-store (:store *deps*)
@@ -80,6 +98,14 @@
       (try
         (> (store/count deps-store source {:find {:_id id}} {}) 0)
         (catch Exception _ false)))))
+
+(defn ResourceField [id-schema resource-key]
+  (Field id-schema (resource-exists? resource-key) "resource-should-exist"))
+
+(def email-valid?
+  (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
+
+(def EmailField (Field String email-valid? "email-should-be-valid"))
 
 (defrecord ReadOnly [schema]
   s/Schema
@@ -91,22 +117,16 @@
 
 (def ? s/optional-key)
 
-(defn Sized [s min max]
-  (s/constrained s
-                 #(<= min (count %) max)
-                 (str "length-" min "-" max)))
+(defn SizedField [type min max]
+  (Field type #(<= min (count %) max) (str "length-" min "-" max)))
 
-(defn Str [min max]
-  (Sized s/Str min max))
+(def url-valid?
+  (partial re-matches #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&|\'()*+,#;=.~_-]*)?$"))
 
-(defn Regex [pattern error-key]
-  (s/constrained s/Str
-                 #(re-matches pattern %)
-                 error-key))
+(def UrlField (Field String url-valid? "url-should-be-valid"))
 
-(def Url (Regex
-           #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&\'()*+,#;=.~_-]*)?$"
-           "url-invalid"))
+(defn EnumField [type enum-set]
+  (Field type (into #{} enum-set) (str "value-should-be-one-of-" (clojure.string/join ", " enum-set))))
 
 (def object-id-matcher
   {ObjectId (coerce/safe #(object-id ^String %))})
