@@ -5,7 +5,7 @@
 (def hooks
   {:pre-read (fn [{:keys [config]} resource request query]
                (if (get-in query [:opts :paginate?])
-                 (let [page (get-in query [:paginate :page] 1)
+                 (let [page (or (get-in query [:paginate :page]) 1)
                        request-per-page (get-in query [:paginate :per-page])
                        resource-per-page (get-in resource [:default-paginate :per-page])
                        config-per-page (get-in config [:default-paginate :per-page] max-limit)
