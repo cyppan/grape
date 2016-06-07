@@ -36,8 +36,7 @@
                        (? :info)     (s/maybe {:gender (EnumField Str #{:male :female})})
                        (? :pages)    [{:url         UrlField
                                        :description (SizedField Str 5 80)}]
-                       (? :features) (s/maybe {:premium (Field Bool)})
-                       }
+                       (? :features) (s/maybe {:premium (Field Bool)})}
    :url               "companies"
    :operations        #{:create :read :update :delete}
    :public-operations #{:create}
@@ -111,7 +110,7 @@
 (def CommentsResource
   {:datasource        {:source "comments"}
    :schema            {(? :_id)      ObjectId
-                       :user         ObjectId
+                       :user         (ResourceField ObjectId :public-users)
                        :company      ObjectId
                        :text         Str
                        (? :_created) (read-only DateTime)

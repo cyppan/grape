@@ -18,5 +18,6 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [com.stuartsierra/component "0.3.1"]
                  [http-kit "2.1.19"]
-                 [com.auth0/java-jwt "2.1.0"]]
+                 [com.auth0/java-jwt "2.1.0"]
+                 [com.rpl/specter "0.11.0"]]
   :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]])

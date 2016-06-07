@@ -57,12 +57,12 @@
       (is (= 1 (count (:_documents fetched))))
       (is (= 3 (:_count fetched)))))
 
-  (testing "embedding users in comments"
-    (load-fixtures)
-    (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
-      (doseq [i (take (count (:_documents fetched)) (range))]
-        (is (= #{:_id :username}
-               (-> fetched (get-in [:_documents i :user]) keys set))))))
+  ;(testing "embedding users in comments"
+  ;  (load-fixtures)
+  ;  (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
+  ;    (doseq [i (take (count (:_documents fetched)) (range))]
+  ;      (is (= #{:_id :username}
+  ;             (-> fetched (get-in [:_documents i :user]) keys set))))))
 
   (testing "users fetching should not show password field"
     (load-fixtures)

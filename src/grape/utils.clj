@@ -1,5 +1,7 @@
 (ns grape.utils
-  (:require [schema.core :as s])
+  (:require [schema.core :as s]
+            [com.rpl.specter :refer :all]
+            [com.rpl.specter.macros :refer :all])
   (:import (schema.spec.leaf LeafSpec)
            (schema.spec.variant VariantSpec)
            (schema.spec.collection CollectionSpec)))
@@ -37,17 +39,17 @@
     []))
 
 (defn expand-keyseqs [ks filter-seq?]
-  (let [expanded (atom [])]
+  (let [expanded (volatile! [])]
     (->> ks
          (map #(if filter-seq? (filter (partial not= []) %) %))
          (map expand-keyseq)
          (clojure.walk/postwalk #(if (and
-                                        (sequential? %)
-                                        (every? (complement sequential?) %))
-                                 (do
-                                   (swap! expanded (fn [expanded] (conj expanded %)))
-                                   %)
-                                 %)))
+                                       (sequential? %)
+                                       (every? (complement sequential?) %))
+                                  (do
+                                    (vswap! expanded (fn [expanded] (conj expanded %)))
+                                    %)
+                                  %)))
     (-> @expanded set)))
 
 (defn walk-structure [s key-fn leaf-fn]
@@ -85,3 +87,29 @@
   (->> (walk-schema schema identity #(do % 1))
        flatten-structure
        (map first)))
+
+(deftype FieldMeta [metadata])
+
+(defn get-schema-relations
+  "this function gets a schema as its input and returns a map of a Specter path to the corresponding relation spec"
+  [schema]
+  (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
+    (doseq [[path metadata] (flatten-structure (walk-schema schema identity #(FieldMeta. (meta %))))
+            :let [relation-spec (:grape/relation-spec (.-metadata metadata))
+                  specter-path (map #(if (vector? %) ALL %) path)]
+            :when relation-spec]
+      (vswap! relations assoc specter-path relation-spec))
+    @relations))
+
+(defn get-schema-types-ks [schema]
+  (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
+    (doseq [[path metadata] (flatten-structure (walk-schema schema identity #(FieldMeta. (meta %))))
+            :let [type-spec (:grape/type (.-metadata metadata))]
+            :when type-spec]
+      (vswap! relations assoc path type-spec))
+    @relations))
+
+(defn get-schema-types [schema]
+  (reduce (fn [acc [ks v]] (assoc-in acc ks v))
+          {}
+          (get-schema-types-ks schema)))
