@@ -21,6 +21,13 @@
    (wrap-auth :create (fn [auth-value doc-field payload]
                         (update-in payload [doc-field]
                                    (fn [existing-value]
+                                     (if-not existing-value
+                                       auth-value
+                                       existing-value)))))
+   :post-create-post-validate
+   (wrap-auth :create (fn [auth-value doc-field payload]
+                        (update-in payload [doc-field]
+                                   (fn [existing-value]
                                      (if (and existing-value (not= (str existing-value) (str auth-value)))
                                        (throw (ex-info "Forbidden" {:type :forbidden}))
                                        auth-value)))))
@@ -28,10 +35,24 @@
    (wrap-auth :update (fn [auth-value doc-field payload]
                         (update-in payload [doc-field]
                                    (fn [existing-value]
+                                     (if-not existing-value
+                                       auth-value
+                                       existing-value)))))
+   :pre-update-post-validate
+   (wrap-auth :update (fn [auth-value doc-field payload]
+                        (update-in payload [doc-field]
+                                   (fn [existing-value]
                                      (if (and existing-value (not= (str existing-value) (str auth-value)))
                                        (throw (ex-info "Forbidden" {:type :forbidden}))
                                        auth-value)))))
    :pre-partial-update-pre-validate
+   (wrap-auth :update (fn [auth-value doc-field payload]
+                        (update-in payload [doc-field]
+                                   (fn [existing-value]
+                                     (if-not existing-value
+                                       auth-value
+                                       existing-value)))))
+   :pre-partial-update-post-validate
    (wrap-auth :update (fn [auth-value doc-field payload]
                         (update-in payload [doc-field]
                                    (fn [existing-value]

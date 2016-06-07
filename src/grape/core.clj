@@ -6,10 +6,13 @@
             [grape.store :refer :all]
             [plumbing.core :refer :all]
             [clojure.core.match :refer [match]]
-            [plumbing.graph :as graph]
             [grape.query :refer [validate-query]]
             [cheshire.generate :refer [add-encoder encode-str remove-encoder]]
-            [clj-time.format :as f])
+            [clj-time.format :as f]
+            [com.rpl.specter :refer :all]
+            [com.rpl.specter.macros :refer :all]
+            [grape.utils :refer [get-schema-relations]]
+            [com.climate.claypoole :as cp])
   (:import (org.joda.time DateTime)))
 
 (add-encoder DateTime (fn [d jsonGenerator]
@@ -17,93 +20,75 @@
                               s (f/unparse formatter d)]
                           (.writeString jsonGenerator s))))
 
+(def pool (cp/threadpool 10))
+;; TODO swith this pool into the app-system to be able to access config and close it when the app stops
+
 (declare read-resource)
 
-(defn read-relation-resource [deps resource request relation-key relation-query documents]
-  (let [{resources-registry :resources-registry} deps
-        relation-spec (get-in resource [:relations relation-key])
-        rel-resource (resources-registry (:resource relation-spec))
-        rel-paginate (or (:paginate relation-query) (get-in relation-spec [:query :paginate]))
-        rel-sort (or (:sort relation-query) (get-in relation-spec [:query :sort]))]
-    (match [(:type relation-spec) (boolean (or rel-paginate rel-sort))]
-           [:ref-field false]
-           ;; if no paginate or sort, we can batch the fetch of relations for all the documents
-           ;; and group by the relation field later when associating the relations
-           (let [field (:field relation-spec)
-                 rel-query (update-in relation-query [:find] #(merge % {field {"$in" (map :_id documents)}}))]
-             (-> (read-resource deps rel-resource request rel-query)
-                 :_documents))
-           [:ref-field true]
-           ;; Here no optimization possible, we do one request by document (in parallel at least)
-           (->> documents
-                (map :_id)
-                (pmap (fn [id]
-                        (let [field (:field relation-spec)
-                              rel-query (update-in relation-query [:find] #(merge % {field id}))]
-                          [id (read-resource deps rel-resource request rel-query)])))
-                (into {}))
+(defn read-relation [deps resource request docs* rel-key rel-query]
+  (let [rel-path (map (fn [part]
+                        (if (= part "[]") ALL (keyword part)))
+                      (clojure.string/split (name rel-key) #"\."))
+        rel-spec (get (get-schema-relations (:schema resource)) rel-path)
+        rel-resource (get-in deps [:resources-registry (:resource rel-spec)])
+        docs @docs*]
+    (match [(:type rel-spec) (boolean (or (:paginate rel-query) (:sort rel-query)))]
            [:embedded _]
-           (let [ids (flatten (map #(get-in % (:path relation-spec)) documents))
-                 rel-query (update-in relation-query [:find] #(merge % {:_id {"$in" ids}}))]
-             (-> (read-resource deps rel-resource request rel-query)
-                 :_documents))
-           [_ _] nil)))
+           (let [;; First collect every id to fetch
+                 rel-ids (distinct (mapcat #(select rel-path %) (map second docs)))
+                 ;; build a map of ids to fetched documents
+                 rel-docs-by-id (->> (:_documents
+                                       (read-resource deps rel-resource request
+                                                      (update-in rel-query [:find] #(merge % {:_id {"$in" rel-ids}}))))
+                                     (map #(vector (:_id %) %))
+                                     (into {}))]
+             (doseq [[doc-id _] docs]
+               (swap! docs* update-in [doc-id] #(transform rel-path rel-docs-by-id %))))
+           [:join false]
+           (let [arity-single? (= (:arity rel-spec) :single)
+                 rel-ids (map first docs)
+                 rel-field (:field rel-spec)
+                 rel-docs-by-field (->> (:_documents
+                                          (read-resource deps rel-resource request
+                                                         (update-in rel-query [:find] #(merge % {rel-field {"$in" rel-ids}}))))
+                                        (group-by rel-field))]
+             (doseq [[doc-id _] docs]
+               (swap! docs* update-in [doc-id] #(transform rel-path (constantly (-> (rel-docs-by-field doc-id)
+                                                                                    (?> arity-single? first))) %))))
+           [:join true]
+           ;; no optimization possible, we do parallely, and given the threadpool, the fetching for each document
+           (let [rel-ids (map first docs)
+                 rel-field (:field rel-spec)
+                 rel-docs-by-field (->> (cp/pmap pool
+                                                 (fn [id]
+                                                   [id (:_documents
+                                                         (read-resource deps rel-resource request
+                                                                        (update-in rel-query [:find] #(merge % {rel-field id}))))])
+                                                 rel-ids)
+                                        (into {}))]
+             (doseq [[doc-id _] docs]
+               (swap! docs* update-in [doc-id] #(transform rel-path (constantly (rel-docs-by-field doc-id)) %))))
+           )))
 
 (defn read-resource [{:keys [store hooks] :as deps} resource request query]
   (let [[pre-read-fn post-read-fn] ((juxt :pre-read :post-read) (compose-hooks hooks resource))
         query (pre-read-fn deps resource request query)
         query (validate-query deps resource request query {:recur? false})
         {:keys [relations]} query
-        fetch-graph
-        {:documents
-         (fnk []
-           (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))}
+        docs* (atom (->> (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
+                         (map #(vector (:_id %) %))
+                         (into {})))
         count? (get-in query [:opts :count?])
-        fetch-graph-with-count
-        (if count?
-          (assoc fetch-graph :count (fnk [] (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})))
-          fetch-graph)
-        fetch-graph-with-relations
-        (if (empty? relations)
-          fetch-graph-with-count
-          (merge
-            fetch-graph-with-count
-            (apply merge
-                   (for [[relation-key relation-query] relations]
-                     {relation-key
-                      (fnk [documents]
-                        (read-relation-resource deps resource request relation-key relation-query documents))}))))
-        fetcher (graph/par-compile fetch-graph-with-relations)
-        fetched (fetcher {})]
-    (->>
-      (for [doc (:documents fetched)]
-        (merge doc
-               (apply merge
-                      (for [[relation-key _] relations
-                            :let [relation-spec (get-in resource [:relations relation-key])
-                                  relations-fetched (relation-key fetched)]]
-                        (condp = (:type relation-spec)
-                          :embedded
-                          (let [path (:path relation-spec)
-                                at-path (get-in doc path)]
-                            (if (vector? at-path)
-                              (assoc-in {} path (into [] (filter #((set at-path) (:_id %)) relations-fetched)))
-                              (assoc-in {} path (first (filter #(= (:_id %) at-path) relations-fetched)))))
-                          :ref-field
-                          (let [path (:path relation-spec)
-                                field (:field relation-spec)
-                                arity-single? (= :single (:arity relation-spec))]
-                            (if (map? relations-fetched)
-                              (assoc-in {} path (get relations-fetched (:_id doc)))
-                              (assoc-in {} path
-                                        (->> relations-fetched
-                                             (filter #(= (field %) (:_id doc)))
-                                             (into [])
-                                             (?>> arity-single? first))))))))))
-      (#(merge {:_count (:count fetched)}
-               {:_query query}
-               {:_documents (into [] %)}))
-      (post-read-fn deps resource request))))
+        count (when count?
+                (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))]
+    (when (seq relations)
+      (cp/pdoseq pool
+                 [[rel-key rel-query] relations]
+                 (read-relation deps resource request docs* rel-key rel-query)))
+    (->> {:_count     count
+          :_query     query
+          :_documents (map second @docs*)}
+         (post-read-fn deps resource request))))
 
 (defn read-item [deps resource request query]
   (->

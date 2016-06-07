@@ -6,14 +6,11 @@
             [grape.rest.route :refer [build-resources-routes]]
             [grape.http :refer [wrap-jwt-auth new-http-server]]
             [grape.hooks.core :refer [hooks]]
-            [ring.adapter.jetty :refer [run-jetty]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [ring.middleware.cors :refer [wrap-cors]]
             [bidi.ring :refer [make-handler]]
             [grape.store :as store])
-  (:import (org.joda.time DateTime)
-           (org.bson.types ObjectId))
   (:gen-class))
 
 (def config
@@ -38,11 +35,13 @@
                        [[true not-found-handler]])]))
 
 (defn app-wrapper [deps]
-  (comp #(wrap-cors % identity)
-        wrap-params
+  (fn [handler]
+    (-> handler
+        (wrap-cors identity)
         wrap-json-response
-        #(wrap-json-body % {:keywords? true})
-        #(wrap-jwt-auth % (get-in deps [:config :jwt]))))
+        (wrap-json-body {:keywords? true})
+        (wrap-jwt-auth (get-in deps [:config :jwt]))
+        wrap-params)))
 
 (defn app-system [config]
   (component/system-map

@@ -1,14 +1,11 @@
 (ns commentthreadcomponent.resources
-  (:require [grape.schema :refer :all]
-            [schema.core :as s])
-  (:import (org.joda.time DateTime)
-           (org.bson.types ObjectId)))
+  (:require [grape.schema :refer :all]))
 
 (def UsersResource
   {:datasource        {:source "users"}
    :schema            {(? :_id)      ObjectId
                        :username     #"^[A-Za-z0-9_ ]{2,25}$"
-                       (? :website)  (s/maybe Url)
+                       (? :website)  (maybe UrlField)
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "users"
@@ -29,8 +26,8 @@
 (def CommentsResource
   {:datasource        {:source "comments"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists :users) "resource-exists")
-                       :text         s/Str
+                       :user         (ResourceField ObjectId :users)
+                       :text         Str
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "comments"
@@ -43,8 +40,8 @@
 (def LikesResource
   {:datasource        {:source "likes"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists :users) "resource-exists")
-                       :comment      (s/constrained ObjectId (resource-exists :comments) "resource-exists")
+                       :user         (ResourceField ObjectId :public-users)
+                       :comment      (ResourceField ObjectId :comments)
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "likes"

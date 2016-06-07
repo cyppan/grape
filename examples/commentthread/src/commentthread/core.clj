@@ -2,7 +2,6 @@
   (:require [monger.core :as mg]
             [grape.hooks.core :refer [hooks]]
             [grape.schema :refer :all]
-            [schema.core :as s]
             [grape.rest.route :refer [handler-builder]]
             [grape.store :refer [map->MongoDataSource]]
             [grape.http :refer [wrap-jwt-auth]]
@@ -22,7 +21,7 @@
                                           [even? "should-be-even"]])
                        :username  #"^[A-Za-z0-9_ ]{2,25}$"
                        (? :website)
-                                  (s/maybe UrlField)
+                                  (maybe UrlField)
                        (? :_created)
                                   (read-only DateTime)
                        (? :_updated)
@@ -45,8 +44,8 @@
 (def CommentsResource
   {:datasource        {:source "comments"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists? :users) "resource-exists")
-                       :text         s/Str
+                       :user         (ResourceField ObjectId :public-users)
+                       :text         Str
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "comments"
@@ -59,8 +58,8 @@
 (def LikesResource
   {:datasource        {:source "likes"}
    :schema            {(? :_id)      ObjectId
-                       :user         (s/constrained ObjectId (resource-exists? :users) "resource-exists")
-                       :comment      (s/constrained ObjectId (resource-exists? :comments) "resource-exists")
+                       :user         (ResourceField ObjectId :public-users)
+                       :comment      (ResourceField ObjectId :comments)
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
    :url               "likes"

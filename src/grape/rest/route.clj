@@ -98,10 +98,12 @@
 
 (defn build-resources-routes [{:keys [resources-registry] :as deps}]
   (let [resources (for [[_ resource] resources-registry] resource)]
-    (mapcat identity (map (partial build-resource-routes deps) resources))))
+    (into []
+          (mapcat identity (map (partial build-resource-routes deps) resources)))))
 
 (defn handler-builder
   ([deps]
    (handler-builder deps "/"))
   ([deps prefix]
+   (clojure.pprint/pprint [prefix (build-resources-routes deps)])
    (make-handler [prefix (build-resources-routes deps)])))

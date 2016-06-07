@@ -33,7 +33,7 @@
                  clojure.walk/keywordize-keys
                  (assoc request :auth)
                  handler))
-          (catch Exception _ nil))
+          (catch Exception _ (handler request)))
         (handler request)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;

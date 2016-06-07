@@ -4,7 +4,8 @@
             [com.rpl.specter.macros :refer :all])
   (:import (schema.spec.leaf LeafSpec)
            (schema.spec.variant VariantSpec)
-           (schema.spec.collection CollectionSpec)))
+           (schema.spec.collection CollectionSpec)
+           (schema.core Maybe)))
 
 (defn deep-merge
   "Recursively merges maps. If keys are not maps, the last value wins."
@@ -70,7 +71,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn walk-schema [s key-fn leaf-fn]
-  (let [spec (s/spec s)]
+  (let [s (if (instance? Maybe s)
+            (:schema s)
+            s)
+        spec (s/spec s)]
     (cond
       (or (instance? LeafSpec spec) (instance? VariantSpec spec))
       (leaf-fn s)
@@ -96,7 +100,7 @@
   (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
     (doseq [[path metadata] (flatten-structure (walk-schema schema identity #(FieldMeta. (meta %))))
             :let [relation-spec (:grape/relation-spec (.-metadata metadata))
-                  specter-path (map #(if (vector? %) ALL %) path)]
+                  specter-path (into [] (map #(if (vector? %) ALL %) path))]
             :when relation-spec]
       (vswap! relations assoc specter-path relation-spec))
     @relations))

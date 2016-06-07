@@ -19,5 +19,9 @@
                  [com.stuartsierra/component "0.3.1"]
                  [http-kit "2.1.19"]
                  [com.auth0/java-jwt "2.1.0"]
-                 [com.rpl/specter "0.11.0"]]
-  :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]])
+                 [com.rpl/specter "0.11.0"]
+                 [com.climate/claypoole "1.1.2"]]
+  :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]]
+  :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                  [org.slf4j/slf4j-nop "1.7.12"]]
+                   :source-paths ["dev"]}})

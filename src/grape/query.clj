@@ -3,7 +3,9 @@
             [schema.spec.core :as spec]
             [schema.spec.collection :refer [subschemas]]
             [grape.utils :refer :all]
-            [grape.hooks.core :refer :all]))
+            [grape.hooks.core :refer :all]
+            [com.rpl.specter :refer :all]
+            [com.rpl.specter.macros :refer :all]))
 
 (def ? s/optional-key)
 (def StrOrKeyword (s/either s/Str s/Keyword))
@@ -16,7 +18,7 @@
 (def Query
   {(? :find)      (s/maybe {StrOrKeyword s/Any})
    (? :fields)    (s/maybe [s/Keyword])
-   (? :sort)      (s/maybe {s/Keyword {StrOrKeyword (s/enum 1 -1)}})
+   (? :sort)      (s/maybe {StrOrKeyword (s/enum 1 -1)})
    (? :paginate)  (s/maybe {(? :page)     (s/maybe s/Int)
                             (? :per-page) (s/maybe s/Int)})
    (? :opts)      (s/maybe {(? :count?)    s/Bool
@@ -64,8 +66,12 @@
   (let [{:keys [relations]} query]
     (merge (dissoc query :relations)
            {:relations (apply merge (for [[relation-key relation-q] relations
-                                          :let [relation-spec (get-in resource [:relations relation-key])
-                                                relation-res (when relation-spec ((:resource relation-spec) resources-registry))
+                                          :let [relation-path (map (fn [part]
+                                                                     (if (= part "[]")
+                                                                       ALL
+                                                                       (keyword part))) (clojure.string/split (name relation-key) #"\."))
+                                                relation-spec (get (get-schema-relations (:schema resource)) relation-path)
+                                                relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
                                                 embedded? (when relation-spec (= :embedded (:type relation-spec)))
                                                 relation-q (if embedded?
                                                              (merge relation-q {:opts {:count?    false

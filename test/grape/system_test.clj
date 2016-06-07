@@ -43,13 +43,7 @@
    :auth-strategy     {:type       :field
                        :auth-field :auth_id
                        :doc-field  :_id}
-   :soft-delete       true
-   :relations         {:permissions {:type     :ref-field
-                                     :arity    :many
-                                     :path     [:permissions]
-                                     :resource :companies-permissions
-                                     :field    :company}
-                       :users       {:type :ref-field}}})
+   :soft-delete       true})
 
 (def UsersResource
   {:datasource        {:source "users"}
@@ -59,24 +53,21 @@
                                         #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
                                         "username-should-be-valid")
                        :email    EmailField
-                       :password (Field Str)}
+                       :password (Field Str)
+                       (? :comments) (vary-meta
+                                       (read-only [s/Any])
+                                       merge {:grape/type 'Comments
+                                              :grape/relation-spec {:type :join
+                                                                    :arity :many
+                                                                    :resource :comments
+                                                                    :field :user}})}
    :fields            #{:_id :company :username :email}
    :url               "users"
    :operations        #{:create :read :update :delete}
-   :public-operations #{:create}
+   :public-operations #{:read :create}
    :auth-strategy     {:type       :field
                        :auth-field :auth_id
                        :doc-field  :_id}
-   :relations         {:permissions {:type     :ref-field
-                                     :arity    :many
-                                     :path     [:permissions]
-                                     :resource :users-permissions
-                                     :field    :user}
-                       :comments    {:type     :ref-field
-                                     :arity    :many
-                                     :path     [:comments]
-                                     :resource :comments
-                                     :field    :user}}
    :extra-endpoints   [["me" (fn [deps resource request]
                                (read-item deps resource request {}))]]})
 
@@ -110,8 +101,19 @@
 (def CommentsResource
   {:datasource        {:source "comments"}
    :schema            {(? :_id)      ObjectId
-                       :user         (ResourceField ObjectId :public-users)
-                       :company      ObjectId
+                       :user         (vary-meta
+                                       (ResourceField ObjectId :public-users)
+                                       merge {:grape/relation-spec {:type     :embedded
+                                                                    :resource :public-users}})
+                       (? :embedded) (maybe {:user (vary-meta
+                                                     (ResourceField ObjectId :public-users)
+                                                     merge {:grape/relation-spec {:type     :embedded
+                                                                                  :resource :public-users}})})
+                       (? :users) [(vary-meta
+                                     (ResourceField ObjectId :public-users)
+                                     merge {:grape/relation-spec {:type     :embedded
+                                                                  :resource :public-users}})]
+                       (? :company)  ObjectId
                        :text         Str
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
@@ -121,9 +123,6 @@
    :auth-strategy     {:type       :field
                        :auth-field :auth_id
                        :doc-field  :user}
-   :relations         {:user {:type     :embedded
-                              :path     [:user]
-                              :resource :public-users}}
    :soft-delete       true})
 
 (def config {:default-paginate {:per-page 10}

@@ -1,4 +1,5 @@
 (ns grape.hooks.oplog
+  (:refer-clojure :exclude [update count read])
   (:require [schema.core :as s]
             [grape.store :refer :all]
             [clj-time.core :as t])

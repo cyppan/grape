@@ -27,7 +27,7 @@
   {:en {"missing-required-key"         "the field is required"
         "disallowed-key"               "extra fields not allowed"
         "type-invalid"                 "invalid type"
-        "type-should-be-(.*)"          "The field should be of type %s"
+        #"type-should-be-(.*)"         "The field should be of type %s"
         "url-should-be-valid"          "the url should be valid"
         "read-only"                    "the field is read-only"
         "resource-should-exist"        "the resource should exist"
@@ -37,7 +37,7 @@
    :fr {"missing-required-key"         "le champ est requis"
         "disallowed-key"               "les champs supplémentaires ne sont pas autorisés"
         "type-invalid"                 "type invalide"
-        "type-should-be-(.*)"          "Le champ doit être de type %s"
+        #"type-should-be-(.*)"         "Le champ doit être de type %s"
         "url-should-be-valid"          "L'url doit être valide"
         "read-only"                    "le champ est en lecture seule"
         "resource-should-exist"        "la ressource doit exister"
@@ -116,6 +116,8 @@
 (defn read-only [schema] (->ReadOnly schema))
 
 (def ? s/optional-key)
+
+(def maybe s/maybe)
 
 (defn SizedField [type min max]
   (Field type #(<= min (count %) max) (str "length-" min "-" max)))
