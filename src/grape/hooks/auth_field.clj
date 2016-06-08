@@ -24,7 +24,7 @@
                                      (if-not existing-value
                                        auth-value
                                        existing-value)))))
-   :post-create-post-validate
+   :pre-create-post-validate
    (wrap-auth :create (fn [auth-value doc-field payload]
                         (update-in payload [doc-field]
                                    (fn [existing-value]

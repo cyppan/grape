@@ -64,7 +64,7 @@
    :fields            #{:_id :company :username :email}
    :url               "users"
    :operations        #{:create :read :update :delete}
-   :public-operations #{:read :create}
+   :public-operations #{:create}
    :auth-strategy     {:type       :field
                        :auth-field :auth_id
                        :doc-field  :_id}
@@ -105,14 +105,6 @@
                                        (ResourceField ObjectId :public-users)
                                        merge {:grape/relation-spec {:type     :embedded
                                                                     :resource :public-users}})
-                       (? :embedded) (maybe {:user (vary-meta
-                                                     (ResourceField ObjectId :public-users)
-                                                     merge {:grape/relation-spec {:type     :embedded
-                                                                                  :resource :public-users}})})
-                       (? :users) [(vary-meta
-                                     (ResourceField ObjectId :public-users)
-                                     merge {:grape/relation-spec {:type     :embedded
-                                                                  :resource :public-users}})]
                        (? :company)  ObjectId
                        :text         Str
                        (? :_created) (read-only DateTime)
