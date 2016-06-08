@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [cheshire "5.6.1"]
-                 [clj-time "0.11.0"]
+                 [clj-time "0.12.0"]
                  [prismatic/schema "1.1.1"]
                  [prismatic/plumbing "0.5.3"]
                  [metosin/schema-tools "0.9.0"]
@@ -19,7 +19,7 @@
                  [com.stuartsierra/component "0.3.1"]
                  [http-kit "2.1.19"]
                  [com.auth0/java-jwt "2.1.0"]
-                 [com.rpl/specter "0.11.0"]
+                 [com.rpl/specter "0.11.1"]
                  [com.climate/claypoole "1.1.2"]]
   :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]]
   :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
