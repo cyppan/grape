@@ -172,23 +172,23 @@
                :else el))
            error)})
 
+(defn validate [payload schema]
+  (try+
+    (stc/coerce payload schema cleve-coercion-matcher)
+    (catch [:type :schema-tools.coerce/error] {:keys [error]}
+      (throw (ex-info "validation failed" (map-validation-error error))))))
+
 (defn validate-create [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
             *request* request]
-    (try+
-      (stc/coerce payload (:schema resource) cleve-coercion-matcher)
-      (catch [:type :schema-tools.coerce/error] {:keys [error]}
-        (throw (ex-info "validation-create failed" (map-validation-error error)))))))
+    (validate payload (:schema resource))))
 
 (defn validate-update [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
             *request* request]
-    (try+
-      (stc/coerce payload (:schema resource) cleve-coercion-matcher)
-      (catch [:type :schema-tools.coerce/error] {:keys [error]}
-        (throw (ex-info "validation-update failed" (map-validation-error error)))))))
+    (validate payload (:schema resource))))
 
 (defn validate-partial-update [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
@@ -196,7 +196,4 @@
             *request* request]
     ;; for partial update, the schema should have all of its keys optional
     (let [schema (walk-schema (:schema resource) #(s/optional-key (s/explicit-schema-key %)) identity)]
-      (try+
-        (stc/coerce payload schema cleve-coercion-matcher)
-        (catch [:type :schema-tools.coerce/error] {:keys [error]}
-          (throw (ex-info "validation-partial-update failed" (map-validation-error error))))))))
+      (validate payload schema))))
