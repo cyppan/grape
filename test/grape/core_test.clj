@@ -3,8 +3,8 @@
             [grape.core :refer :all]
             [grape.store :as store]
             [grape.query :refer [validate-query]]
-            [grape.system-test]
-            [grape.system-test :refer :all])
+            [grape.fixtures]
+            [grape.fixtures :refer :all])
   (:import (clojure.lang ExceptionInfo)))
 
 ;; TODO test relations not existing

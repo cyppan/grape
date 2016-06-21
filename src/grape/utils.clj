@@ -45,13 +45,16 @@
          (map #(if filter-seq? (filter (partial not= []) %) %))
          (map expand-keyseq)
          (clojure.walk/postwalk #(if (and
+                                       (not= % [])
                                        (sequential? %)
-                                       (every? (complement sequential?) %))
+                                       (every? (fn [el]
+                                                 (or (not (sequential? el))
+                                                     (= [] el))) %))
                                   (do
                                     (vswap! expanded (fn [expanded] (conj expanded %)))
                                     %)
                                   %)))
-    (-> @expanded set)))
+    (into #{} @expanded)))
 
 (defn walk-structure [s key-fn leaf-fn]
   (cond
@@ -80,7 +83,7 @@
       (leaf-fn s)
       (and (instance? CollectionSpec spec) (map? s))
       (reduce (fn [acc [k v]]
-                (assoc acc (key-fn (s/explicit-schema-key k)) (walk-schema v key-fn leaf-fn)))
+                (assoc acc (key-fn k) (walk-schema v key-fn leaf-fn)))
               {} s)
       (and (instance? CollectionSpec spec) (sequential? s))
       (reduce (fn [acc v]
@@ -88,7 +91,7 @@
               [] (or s [])))))
 
 (defn get-schema-keyseqs [schema]
-  (->> (walk-schema schema identity #(do % 1))
+  (->> (walk-schema schema s/explicit-schema-key (constantly 1))
        flatten-structure
        (map first)))
 
@@ -98,7 +101,7 @@
   "this function gets a schema as its input and returns a map of a Specter path to the corresponding relation spec"
   [schema]
   (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
-    (doseq [[path metadata] (flatten-structure (walk-schema schema identity #(FieldMeta. (meta %))))
+    (doseq [[path metadata] (flatten-structure (walk-schema schema s/explicit-schema-key #(FieldMeta. (meta %))))
             :let [relation-spec (:grape/relation-spec (.-metadata metadata))
                   specter-path (into [] (map #(if (vector? %) ALL %) path))]
             :when relation-spec]

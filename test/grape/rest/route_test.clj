@@ -1,49 +1,18 @@
-(ns grape.rest-test
+(ns grape.rest.route-test
   (:require [clojure.test :refer :all]
             [grape.rest.parser :refer :all]
             [grape.rest.route :refer :all]
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
-            [grape.system-test :refer :all]
+            [grape.fixtures :refer :all]
             [slingshot.slingshot :refer [throw+ try+]])
-  (:import (clojure.lang ExceptionInfo)
-           (org.bson.types ObjectId)
+  (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)))
-
-(deftest query-parser
-  (testing "Eve query DSL compatibility"
-    (let [where "{\"name\":{\"$regex\":\"toto\"}}"
-          projection "{\"name\":1}"
-          embedded "{\"myrelation\":1}"
-          sort "-_created"
-          page "1"
-          max_results "50"
-          request {:query-params {"where"       where
-                                  "projection"  projection
-                                  "embedded"    embedded
-                                  "page"        page
-                                  "max_results" max_results
-                                  "sort"        sort}}
-          query (parse-query request)]
-      (is (= query {:find      {:name {:$regex "toto"}}
-                    :fields    ["name"]
-                    :paginate  {:page 1 :per-page 50}
-                    :sort      {:_created -1}
-                    :relations {:myrelation {}}}))))
-
-  (testing "Grape query DSL"
-    (let [query {:find      {:name {:$regex "toto"}}
-                 :fields    ["name"]
-                 :paginate  {:page 1 :per-page 50}
-                 :sort      {:_created -1}
-                 :relations {:myrelation {}}}
-          request {:query-params {"query" (generate-string query)}}]
-      (is (= (parse-query request) query)))))
 
 (deftest route-handlers
   (testing "get resource handler"
     (load-fixtures)
-    (let [resource {:url              "myresource"
+    (let [resource {:url        "myresource"
                     :operations #{:read}}
           routes ["/" (build-resources-routes {:resources-registry {:myresource resource}})]
           resource-match (match-route routes "/myresource")
@@ -54,10 +23,10 @@
 
   (testing "get resource handler with extra endpoints"
     (load-fixtures)
-    (let [resource {:url              "myresource"
-                    :operations #{:read}
-                    :extra-endpoints  [[["extra/" :param] identity]
-                                       ["other" identity]]}
+    (let [resource {:url             "myresource"
+                    :operations      #{:read}
+                    :extra-endpoints [[["extra/" :param] identity]
+                                      ["other" identity]]}
           routes ["/" (build-resource-routes {} resource)]
           resource-match (match-route routes "/myresource")
           item-match (match-route routes "/myresource/1234")
@@ -205,16 +174,3 @@
                    :request-method :post}
           resp (handler request)]
       (is (instance? DateTime (get-in resp [:body :_created]))))))
-
-;(deftest update-resource
-;  (testing "update - validation fails"
-;    (load-fixtures)
-;    (let [id "aaaaaaaaaaaaaaaaaaaaaaa1"
-;          routes ["/" (build-resources-routes deps)]
-;          match (match-route routes (str "/users/" id))
-;          handler (:handler match)
-;          request (merge
-;                    {:request-method :put :auth {:auth_id id}}
-;                    (select-keys match [:route-params]))
-;          resp (handler request)]
-;      (clojure.pprint/pprint resp))))

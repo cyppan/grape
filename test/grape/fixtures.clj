@@ -1,4 +1,4 @@
-(ns grape.system-test
+(ns grape.fixtures
   (:require [grape.store :as store]
             [schema.core :as s]
             [grape.hooks.core :refer [hooks]]

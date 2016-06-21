@@ -12,7 +12,7 @@
     [clojure.test :as test]
     [clojure.tools.namespace.repl :refer [refresh refresh-all]]
     [schema.core :as s]
-    [grape.system-test :refer [UsersResource PublicUsersResource CommentsResource config deps]]
+    [grape.fixtures :refer [UsersResource PublicUsersResource CommentsResource config deps]]
     [monger.core :as mg]
     [grape.store :as store]
     [grape.hooks.core :refer [hooks]])
