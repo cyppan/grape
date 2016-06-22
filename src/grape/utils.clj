@@ -103,9 +103,16 @@
   (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
     (doseq [[path metadata] (flatten-structure (walk-schema schema s/explicit-schema-key #(FieldMeta. (meta %))))
             :let [relation-spec (:grape/relation-spec (.-metadata metadata))
-                  specter-path (into [] (map #(if (vector? %) ALL %) path))]
+                  path (into [] path)]
             :when relation-spec]
-      (vswap! relations assoc specter-path relation-spec))
+      ;; when relation is an embedded there is no restriction for defining the relation in embedded fields or in arrays
+      ;; but when it's a join, array are not authorized except for wrapping the join (corresponds to a join many)
+      (when (= (:type relation-spec) :join)
+        (assert (empty? (->> path
+                             drop-last
+                             (filter sequential?)))
+                "schema error: relation spec join in an object having a parent array in not supported"))
+      (vswap! relations assoc path relation-spec))
     @relations))
 
 (defn get-schema-types-ks [schema]

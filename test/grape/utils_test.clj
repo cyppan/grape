@@ -97,11 +97,10 @@
     (let [schema {:one Str}
           relations (get-schema-relations schema)]
       (is (= relations {}))))
-  (testing "root embedded"
+  (testing "root relations"
     (let [spec-one {:type     :embedded
                     :resource :sample}
           spec-two {:type     :join
-                    :arity    :many
                     :resource :other
                     :field    :field}
           schema {:one
@@ -109,9 +108,36 @@
                              merge {:grape/relation-spec
                                     spec-one})
                   (s/optional-key :two)
-                  (vary-meta Str
+                  (vary-meta (read-only [s/Any])
                              merge {:grape/relation-spec
                                     spec-two})}
           relations (get-schema-relations schema)]
       (is (= relations {[:one] spec-one
-                        [:two] spec-two})))))
+                        [:two] spec-two}))))
+  (testing "array relation"
+    (let [spec {:type     :embedded
+                :resource :sample}
+          schema {:seq [{:field (vary-meta ObjectId
+                                           merge {:grape/relation-spec
+                                                  spec})}]}
+          relations (get-schema-relations schema)]
+      (is (= relations {[:seq [] :field] spec}))))
+  (testing "join in a root array is not supported"
+    (let [spec {:type     :join
+                :resource :other
+                :field    :field}
+          schema {:seq [{:res (vary-meta s/Any
+                                         merge {:grape/relation-spec
+                                                spec})}]}]
+      (is (thrown-with-msg? AssertionError
+                            #"schema error"
+                            (get-schema-relations schema)))))
+  (testing "join in a direct array is supported"
+    (let [spec {:type     :join
+                :resource :other
+                :field    :field}
+          schema {:seq [(vary-meta s/Any
+                                   merge {:grape/relation-spec
+                                          spec})]}
+          relations (get-schema-relations schema)]
+      (is (= relations {[:seq []] spec})))))

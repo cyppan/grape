@@ -11,7 +11,7 @@ This library is a work in progress, stay tuned ;)
 ## Features
 
 Everything is built around the concept of **resources**
-You can see a resource as a super-powered collection of document. 
+You can see a resource as a super-powered collection of document with graph capabilities.
 
 A resource corresponds generally to a MongoDB collection, it's a dictionary
  configuration to expose your collection safely to the external world, providing:
