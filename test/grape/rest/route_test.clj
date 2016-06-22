@@ -23,19 +23,19 @@
 
   (testing "get resource handler with extra endpoints"
     (load-fixtures)
-    (let [resource {:url             "myresource"
-                    :operations      #{:read}
-                    :extra-endpoints [[["extra/" :param] identity]
-                                      ["other" identity]]}
+    (let [resource {:url          "myresource"
+                    :operations   #{:read}
+                    :item-aliases [["extra" identity]
+                                   ["other" identity]]}
           routes ["/" (build-resource-routes {} resource)]
           resource-match (match-route routes "/myresource")
           item-match (match-route routes "/myresource/1234")
-          extra-match (match-route routes "/extra/toto")
+          extra-match (match-route routes "/extra")
           other-match (match-route routes "/other")]
       (is (nil? (match-route routes "/unknown")))
       (is (not (nil? (:handler resource-match))))
       (is (= "1234" (get-in item-match [:route-params :_id])))
-      (is (= "toto" (get-in extra-match [:route-params :param])))
+      (is (not (nil? (:handler extra-match))))
       (is (not (nil? (:handler other-match)))))))
 
 (deftest get-resource
@@ -44,7 +44,8 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/public_users")
           handler (:handler match)
-          request {:query-params {"query" ""} :request-method :get}
+          request {:query-params   {"query" ""}
+                   :request-method :get}
           resp (:body (handler request))]
       (is (= 3 (:_count resp)))
       (is (= #{:_id :username} (->> (:_items resp)
@@ -60,40 +61,39 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/users")
           handler (:handler match)
-          request {:query-params {"query" ""} :body {} :request-method :post}
+          request {:query-params   {"query" ""} :body {}
+                   :request-method :post}
           resp (handler request)]
-      (is (= 422 (:status resp)))
-      ))
+      (is (= 422 (:status resp)))))
 
-  (testing "create - validation fails - company not found"
+  (testing "create - validation fails - user not found"
     (load-fixtures)
     (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users")
+          match (match-route routes "/comments")
           handler (:handler match)
-          request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc9")
-                                                     :username "me"
-                                                     :email    "coucou@coucou.com"
-                                                     :password "secret"} :request-method :post}
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :body           {:user (ObjectId. "ffffffffffffffffffffffff")
+                                    :text "toto"}
+                   :request-method :post}
           resp (handler request)]
       (is (= 422 (:status resp)))
-      (is (= {:company "the resource should exist"} (:body resp)))
-      ))
+      (is (= {:user "the resource should exist"} (:body resp)))))
 
   (testing "create success"
     (load-fixtures)
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/users")
           handler (:handler match)
-          request {:query-params {"query" ""} :body {:company  (ObjectId. "caccccccccccccccccccccc1")
-                                                     :username "me"
-                                                     :email    "coucou@coucou.com"
-                                                     :password "secret"} :request-method :post}
+          request {:body           {:username "me"
+                                    :email    "coucou@coucou.com"
+                                    :password "secret"}
+                   :request-method :post}
           resp (handler request)
           inserted-id (get-in resp [:body :_id])]
       (is (not (nil? inserted-id)))
       (let [match (match-route routes (str "/users/" inserted-id))
             handler (:handler match)
-            request (merge {:auth           {:auth_id (str inserted-id)}
+            request (merge {:auth           {:user (str inserted-id)}
                             :request-method :get}
                            (select-keys match [:route-params]))
             resp (handler request)]
@@ -101,7 +101,7 @@
         (is (= inserted-id (get-in resp [:body :_id]))))
       (let [match (match-route routes (str "/me"))
             handler (:handler match)
-            request {:auth           {:auth_id (str inserted-id)}
+            request {:auth           {:user (str inserted-id)}
                      :request-method :get}
             resp (handler request)]
         (is (= "me" (get-in resp [:body :username])))
@@ -112,17 +112,15 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/comments")
           handler (:handler match)
-          request {:body           {:text    "coucou !"
-                                    :company "caccccccccccccccccccccc1"}
-                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+          request {:body           {:text "coucou !"}
+                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)
           inserted-id (get-in resp [:body :_id])]
       (is (not (nil? inserted-id)))
       (let [match (match-route routes (str "/comments/" inserted-id))
             handler (:handler match)
-            request (merge {:auth           {:auth_id (str inserted-id)}
-                            :request-method :get}
+            request (merge {:request-method :get}
                            (select-keys match [:route-params]))
             resp (handler request)]
         (is (= "coucou !" (get-in resp [:body :text])))
@@ -133,18 +131,16 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/comments")
           handler (:handler match)
-          request {:body           {:text    "coucou !"
-                                    :company "caccccccccccccccccccccc1"
-                                    :user    "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+          request {:body           {:text "coucou !"
+                                    :user "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)
           inserted-id (get-in resp [:body :_id])]
       (is (not (nil? inserted-id)))
       (let [match (match-route routes (str "/comments/" inserted-id))
             handler (:handler match)
-            request (merge {:auth           {:auth_id (str inserted-id)}
-                            :request-method :get}
+            request (merge {:request-method :get}
                            (select-keys match [:route-params]))
             resp (handler request)]
         (is (= "coucou !" (get-in resp [:body :text])))
@@ -156,9 +152,8 @@
           match (match-route routes "/comments")
           handler (:handler match)
           request {:body           {:text    "coucou !"
-                                    :company "caccccccccccccccccccccc1"
                                     :user    "aaaaaaaaaaaaaaaaaaaaaaa2"}
-                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)]
       (is (= 403 (:status resp)))))
@@ -168,9 +163,8 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/comments")
           handler (:handler match)
-          request {:body           {:text    "coucou !"
-                                    :company "caccccccccccccccccccccc1"}
-                   :auth           {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}
+          request {:body           {:text    "coucou !"}
+                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)]
       (is (instance? DateTime (get-in resp [:body :_created]))))))

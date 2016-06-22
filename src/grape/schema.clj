@@ -11,7 +11,6 @@
             [monger.util :refer [object-id]]
             [clj-time.core :as t]
             [clj-time.format :as f]
-            [grape.hooks.core :refer [compose-hooks]]
             [clojure.tools.logging :refer [log]])
   (:import (clojure.lang ExceptionInfo ISeq)
            (schema.utils ValidationError)
@@ -81,6 +80,7 @@
 (def Bool (vary-meta (s/pred #(instance? Boolean %) "type-should-be-boolean") assoc :grape/type 'Bool))
 (def DateTime (vary-meta (s/pred #(instance? org.joda.time.DateTime %) "type-should-be-date-time") assoc :grape/type 'DateTime))
 (def ObjectId (vary-meta (s/pred #(instance? org.bson.types.ObjectId %) "type-should-be-object-id") assoc :grape/type 'ObjectId))
+(def Any (vary-meta (s/pred (constantly true) "type-should-be-any") assoc :grape/type 'Any))
 
 (defn Field
   ([type]
@@ -100,7 +100,10 @@
         (catch Exception _ false)))))
 
 (defn ResourceField [id-schema resource-key]
-  (Field id-schema (resource-exists? resource-key) "resource-should-exist"))
+  (vary-meta
+    (Field id-schema (resource-exists? resource-key) "resource-should-exist")
+    merge {:grape/relation-spec {:type :embedded
+                                 :resource resource-key}}))
 
 (def email-valid?
   (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
@@ -111,9 +114,17 @@
   s/Schema
   (spec [this]
     (leaf/leaf-spec
-      (spec/precondition this (fn [_] false) (fn [_] "this key is read-only"))))
+      (spec/precondition this (constantly false) (fn [_] "this key is read-only"))))
   (explain [this] (list 'read-only (s/explain schema))))
 (defn read-only [schema] (->ReadOnly schema))
+
+(defrecord WriteOnly [schema]
+  s/Schema
+  (spec [this]
+    (leaf/leaf-spec
+      (spec/precondition this (constantly true) (fn [_] ""))))
+  (explain [this] (list 'write-only (s/explain schema))))
+(defn write-only [schema] (->WriteOnly schema))
 
 (def ? s/optional-key)
 

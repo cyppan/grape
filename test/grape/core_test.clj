@@ -1,7 +1,6 @@
 (ns grape.core-test
   (:require [clojure.test :refer :all]
             [grape.core :refer :all]
-            [grape.store :as store]
             [grape.query :refer [validate-query]]
             [grape.fixtures]
             [grape.fixtures :refer :all])
@@ -18,13 +17,8 @@
           query {:toto "c'est l'histoire..."}]
       (is (thrown? ExceptionInfo (validate-query deps CommentsResource request query {:recur? true})))))
 
-  (testing "fetching companies should inject auth filter"
-    (let [request {:auth {:auth_id "caccccccccccccccccccccc1"}}
-          fetched (read-resource deps CompaniesResource request {})]
-      (is (= "caccccccccccccccccccccc1" (get-in fetched [:_query :find :_id])))))
-
   (testing "query for public comments should not inject auth filter"
-    (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
           fetched (read-resource deps CommentsResource request {})]
       (is (nil? (get-in fetched [:_query :find :_id])))))
 
@@ -66,12 +60,12 @@
 
   (testing "users fetching should not show password field"
     (load-fixtures)
-    (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
           query {}
           fetched (read-resource deps UsersResource request query)]
       (is (nil?
             (-> fetched :_documents first :password))))
-    (let [request {:auth {:auth_id "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
           query {:fields [:password :username]}
           fetched (read-resource deps UsersResource request query)]
       (is (nil?

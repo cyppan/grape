@@ -95,6 +95,12 @@
        flatten-structure
        (map first)))
 
+(deftype SchemaWrapper [schema])
+(defn flatten-schema [schema]
+  (->> (walk-schema schema s/explicit-schema-key (fn [s] (SchemaWrapper. s)))
+       flatten-structure
+       (map #(vector (first %) (.-schema (second %))))))
+
 (deftype FieldMeta [metadata])
 
 (defn get-schema-relations

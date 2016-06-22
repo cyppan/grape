@@ -1,7 +1,7 @@
 (ns grape.core
   (:refer-clojure :exclude [update count read])
   (:require [slingshot.slingshot :refer [throw+ try+]]
-            [grape.hooks.core :refer [compose-hooks]]
+            [grape.hooks.utils :refer [compose-hooks]]
             [grape.schema :refer [validate-create validate-update validate-partial-update]]
             [grape.store :refer :all]
             [plumbing.core :refer :all]

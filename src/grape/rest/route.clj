@@ -86,15 +86,14 @@
         {:status 500 :body {:_status "ERR" :_message "an unexpected error occured"}}))))
 
 (defn build-resource-routes [deps resource]
-  (let [extra-endpoints (:extra-endpoints resource {})]
+  (let [item-aliases (:item-aliases resource {})]
     (into []
           (concat [[(:url resource) (partial rest-resource-handler deps resource)]
                    [[(:url resource) "/" :_id] (partial rest-resource-handler deps resource)]]
-                  (for [[route-path handler] extra-endpoints]
+                  (for [[route-path handler] item-aliases]
                     [route-path (fn [request]
                                   (->> (handler deps resource request)
-                                       (assoc {:status 200} :body)
-                                       (format-eve-response)))])))))
+                                       (#(rest-resource-handler deps resource (assoc-in request [:route-params :_id] %)))))])))))
 
 (defn build-resources-routes [{:keys [resources-registry] :as deps}]
   (let [resources (for [[_ resource] resources-registry] resource)]

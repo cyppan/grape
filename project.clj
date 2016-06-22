@@ -2,7 +2,7 @@
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+            :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [cheshire "5.6.2"]
                  [clj-time "0.12.0"]
@@ -22,6 +22,6 @@
                  [com.rpl/specter "0.11.2"]
                  [com.climate/claypoole "1.1.2"]]
   :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]]
-  :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
-                                  [org.slf4j/slf4j-nop "1.7.12"]]
-                   :source-paths ["dev"]}})
+  :profiles {:repl {:main dev}
+             :dev  {:dependencies [[org.clojure/tools.namespace "0.2.11"]]
+                    :source-paths ["dev"]}})

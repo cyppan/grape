@@ -1,5 +1,6 @@
 (ns grape.hooks.restricts-fields
-  (:require [grape.utils :refer :all]))
+  (:require [grape.utils :refer :all])
+  (:import (grape.schema WriteOnly)))
 
 (def hooks
   {:pre-read (fn [deps resource request query]
@@ -7,7 +8,10 @@
                      resource-fields (when-let [fields (:fields resource)] (into #{} fields))
                      schema-fields (into #{}
                                          (map #(keyword (clojure.string/join "." (map name %)))
-                                              (expand-keyseqs (get-schema-keyseqs (:schema resource)) true)))
+                                              (->> (flatten-schema (:schema resource))
+                                                   (filter #(not (instance? WriteOnly (second %))))
+                                                   (map first)
+                                                   (#(expand-keyseqs % true)))))
                      fields (if (seq query-fields)
                               (into [] (filter (or resource-fields schema-fields) query-fields))
                               (into [] (or resource-fields schema-fields)))]
