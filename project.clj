@@ -21,7 +21,7 @@
                  [com.auth0/java-jwt "2.1.0"]
                  [com.rpl/specter "0.11.2"]
                  [com.climate/claypoole "1.1.2"]]
-  :plugins [[lein-cloverage "1.0.7-SNAPSHOT"]]
+  :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl {:main dev}
              :dev  {:dependencies [[org.clojure/tools.namespace "0.2.11"]]
                     :source-paths ["dev"]}})
