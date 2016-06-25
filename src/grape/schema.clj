@@ -14,9 +14,12 @@
             [clojure.tools.logging :refer [log]])
   (:import (clojure.lang ExceptionInfo ISeq)
            (schema.utils ValidationError)
-           (schema.core Predicate Constrained)
+           (schema.core Predicate Constrained Maybe)
            (java.util UnknownFormatConversionException)
-           (java.util.regex Pattern)))
+           (java.util.regex Pattern)
+           (schema.spec.leaf LeafSpec)
+           (schema.spec.collection CollectionSpec)
+           (schema.spec.variant VariantSpec)))
 
 (def ^:dynamic *deps* {})
 (def ^:dynamic *resource* {})
@@ -102,8 +105,21 @@
 (defn ResourceField [id-schema resource-key]
   (vary-meta
     (Field id-schema (resource-exists? resource-key) "resource-should-exist")
-    merge {:grape/relation-spec {:type :embedded
+    merge {:grape/relation-spec {:type     :embedded
                                  :resource resource-key}}))
+
+(defn ResourceJoin
+  ([resource-key resource-field]
+   (vary-meta
+     Any
+     merge {:grape/relation-spec
+            {:type     :join
+             :resource resource-key
+             :field    resource-field}}))
+  ([resource-key resource-field type]
+   (vary-meta
+     (ResourceJoin resource-key resource-field)
+     merge {:grape/type type})))
 
 (def email-valid?
   (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
@@ -147,6 +163,69 @@
 (def date-time-matcher
   (let [date-formatter (get-in *deps* [:config :date-formatter] (f/formatters :date-time))]
     {DateTime (coerce/safe #(f/parse date-formatter))}))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utils
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn walk-schema [s key-fn leaf-fn]
+  (let [s (cond
+            (instance? Maybe s)
+            (:schema s)
+            (instance? ReadOnly s)
+            (:schema s)
+            (instance? WriteOnly s)
+            (with-meta (:schema s) {:grape/write-only true})
+            :else
+            s)
+        spec (s/spec s)]
+    (cond
+      (or (instance? LeafSpec spec) (instance? VariantSpec spec))
+      (leaf-fn s)
+      (and (instance? CollectionSpec spec) (map? s))
+      (reduce (fn [acc [k v]]
+                (assoc acc (key-fn k) (walk-schema v key-fn leaf-fn)))
+              {} s)
+      (and (instance? CollectionSpec spec) (sequential? s))
+      (reduce (fn [acc v]
+                (conj acc (walk-schema v key-fn leaf-fn)))
+              [] (or s [])))))
+
+(defn get-schema-keyseqs [schema]
+  (->> (walk-schema schema s/explicit-schema-key (constantly 1))
+       flatten-structure
+       (map first)))
+
+(deftype SchemaWrapper [schema])
+(defn flatten-schema [schema]
+  (->> (walk-schema schema s/explicit-schema-key (fn [s] (SchemaWrapper. s)))
+       flatten-structure
+       (map #(vector (first %) (.-schema (second %))))))
+
+(deftype FieldMeta [metadata])
+
+(defn get-schema-relations
+  "this function gets a schema as its input and returns a map of a Specter path to the corresponding relation spec"
+  [schema]
+  (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
+    (doseq [[path metadata] (flatten-structure (walk-schema schema s/explicit-schema-key #(FieldMeta. (meta %))))
+            :let [relation-spec (:grape/relation-spec (.-metadata metadata))
+                  path (into [] path)]
+            :when relation-spec]
+      ;; when relation is an embedded there is no restriction for defining the relation in embedded fields or in arrays
+      ;; but when it's a join, array are not authorized except for wrapping the join (corresponds to a join many)
+      (when (= (:type relation-spec) :join)
+        (assert (empty? (->> path
+                             drop-last
+                             (filter sequential?)))
+                "schema error: relation spec join in an object having a parent array in not supported"))
+      (vswap! relations assoc path relation-spec))
+    @relations))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Validation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn cleve-coercion-matcher [schema]
   (or (stc/default-coercion-matcher schema)

@@ -24,20 +24,14 @@
 
 (def UsersResource
   {:datasource        {:source "users"}
+   :type              'User
    :schema            {(? :_id)      ObjectId
                        :username     (Field Str
                                             #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
                                             "username-should-be-valid")
                        :email        EmailField
-                       :password     (write-only
-                                       Str)
-                       (? :comments) (read-only [(vary-meta
-                                                   Any
-                                                   merge {:grape/type 'Comment
-                                                          :grape/relation-spec
-                                                                      {:type     :join
-                                                                       :resource :comments
-                                                                       :field    :user}})])
+                       :password     (write-only Str)
+                       (? :comments) (read-only [(ResourceJoin :comments :user 'Comment)])
                        (? :friends)  [(ResourceField ObjectId :users)]
                        (? :_created) (read-only DateTime)
                        (? :_updated) (read-only DateTime)}
@@ -54,6 +48,7 @@
 ; read only and safe for public exposure
 (def PublicUsersResource
   {:datasource {:source "users"}
+   :type       'User
    :schema     {:_id      Str
                 :username Str}
    :url        "public_users"
@@ -61,23 +56,14 @@
 
 (def CommentsResource
   {:datasource        {:source "comments"}
+   :type              'Comment
    :schema            {(? :_id)          ObjectId
                        :user             (ResourceField ObjectId :public-users)
                        :text             Str
-                       (? :parent)       (maybe
-                                           (ResourceField ObjectId :comments))
-                       (? :last_replies) (read-only
-                                           [(ResourceField ObjectId :comments)])
-                       (? :likes)        (read-only
-                                           [(vary-meta
-                                              Any
-                                              merge {:grape/type 'Like
-                                                     :grape/relation-spec
-                                                                 {:type     :join
-                                                                  :resource :likes
-                                                                  :field    :comment}})])
-                       (? :statistics)   (read-only
-                                           {:likes Int})
+                       (? :parent)       (maybe (ResourceField ObjectId :comments))
+                       (? :last_replies) (read-only [(ResourceField ObjectId :comments)])
+                       (? :likes)        (read-only [(ResourceJoin :likes :comment 'Like)])
+                       (? :statistics)   (read-only {:likes Int})
                        (? :_created)     (read-only DateTime)
                        (? :_updated)     (read-only DateTime)}
    :url               "comments"
@@ -90,7 +76,7 @@
    :post-create       (fn [deps resource request payload]
                         ; If this is a reply
                         ; maintain an array of the three last replies on it
-                        ; to optimize requests
+                        ; to optimize fetching
                         (when-let [parent (:parent payload)]
                           (mc/update (get-in deps [:store :db]) "comments"
                                      {:_id parent}
@@ -101,6 +87,7 @@
 
 (def LikesResource
   {:datasource        {:source "likes"}
+   :type              'Like
    :schema            {(? :_id) ObjectId
                        :user    (ResourceField ObjectId :public-users)
                        :comment (ResourceField ObjectId :comments)}

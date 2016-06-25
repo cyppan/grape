@@ -108,12 +108,12 @@
                              merge {:grape/relation-spec
                                     spec-one})
                   (s/optional-key :two)
-                  (vary-meta (read-only [s/Any])
-                             merge {:grape/relation-spec
-                                    spec-two})}
+                  (read-only [(vary-meta s/Any
+                                         merge {:grape/relation-spec
+                                                spec-two})])}
           relations (get-schema-relations schema)]
       (is (= relations {[:one] spec-one
-                        [:two] spec-two}))))
+                        [:two []] spec-two}))))
   (testing "array relation"
     (let [spec {:type     :embedded
                 :resource :sample}

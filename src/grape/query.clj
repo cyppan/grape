@@ -3,6 +3,7 @@
             [schema.spec.core :as spec]
             [schema.spec.collection :refer [subschemas]]
             [grape.utils :refer :all]
+            [grape.schema :refer [get-schema-keyseqs get-schema-relations]]
             [grape.hooks.core :refer :all]
             [com.rpl.specter :refer :all]
             [com.rpl.specter.macros :refer :all]))
@@ -68,7 +69,7 @@
            {:relations (apply merge (for [[relation-key relation-q] relations
                                           :let [relation-path (map (fn [part]
                                                                      (if (= part "[]")
-                                                                       ALL
+                                                                       []
                                                                        (keyword part))) (clojure.string/split (name relation-key) #"\."))
                                                 relation-spec (get (get-schema-relations (:schema resource)) relation-path)
                                                 relation-res (when relation-spec (get resources-registry (:resource relation-spec)))

@@ -12,11 +12,11 @@
     [clojure.test :as test]
     [clojure.tools.namespace.repl :refer [refresh refresh-all]]
     [schema.core :as s]
-    [grape.fixtures :refer [UsersResource PublicUsersResource CommentsResource config deps]]
+    [grape.fixtures :refer [UsersResource PublicUsersResource CommentsResource LikesResource config deps]]
+    [grape.schema :as gs]
     [monger.core :as mg]
     [grape.store :as store]
     [grape.hooks.core :refer [hooks]])
-  (:use grape.core)
   (:import (clojure.lang ExceptionInfo)
            (org.bson.types ObjectId)))
 

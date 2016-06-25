@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [update count read])
   (:require [slingshot.slingshot :refer [throw+ try+]]
             [grape.hooks.utils :refer [compose-hooks]]
-            [grape.schema :refer [validate-create validate-update validate-partial-update]]
+            [grape.schema :refer [validate-create validate-update validate-partial-update get-schema-relations]]
             [grape.store :refer :all]
             [plumbing.core :refer :all]
             [clojure.core.match :refer [match]]
@@ -11,7 +11,6 @@
             [clj-time.format :as f]
             [com.rpl.specter :refer :all]
             [com.rpl.specter.macros :refer :all]
-            [grape.utils :refer [get-schema-relations]]
             [com.climate.claypoole :as cp])
   (:import (org.joda.time DateTime)))
 
@@ -27,7 +26,7 @@
 
 (defn read-relation [deps resource request docs* rel-key rel-query]
   (let [rel-path (map (fn [part]
-                        (if (= part "[]") ALL (keyword part)))
+                        (if (= part "[]") [] (keyword part)))
                       (clojure.string/split (name rel-key) #"\."))
         rel-spec (get (get-schema-relations (:schema resource)) rel-path)
         rel-resource (get-in deps [:resources-registry (:resource rel-spec)])
@@ -45,7 +44,7 @@
              (doseq [[doc-id _] docs]
                (swap! docs* update-in [doc-id] #(transform rel-path rel-docs-by-id %))))
            [:join false]
-           (let [arity-single? (= (:arity rel-spec) :single)
+           (let [arity-single? (not= (last rel-path) [])
                  rel-ids (map first docs)
                  rel-field (:field rel-spec)
                  rel-docs-by-field (->> (:_documents
@@ -87,7 +86,7 @@
                  (read-relation deps resource request docs* rel-key rel-query)))
     (->> {:_count     count
           :_query     query
-          :_documents (map second @docs*)}
+          :_documents (into [] (map second @docs*))}
          (post-read-fn deps resource request))))
 
 (defn read-item [deps resource request query]

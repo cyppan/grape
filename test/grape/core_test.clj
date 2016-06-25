@@ -51,13 +51,6 @@
       (is (= 1 (count (:_documents fetched))))
       (is (= 3 (:_count fetched)))))
 
-  ;(testing "embedding users in comments"
-  ;  (load-fixtures)
-  ;  (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
-  ;    (doseq [i (take (count (:_documents fetched)) (range))]
-  ;      (is (= #{:_id :username}
-  ;             (-> fetched (get-in [:_documents i :user]) keys set))))))
-
   (testing "users fetching should not show password field"
     (load-fixtures)
     (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
@@ -70,4 +63,19 @@
           fetched (read-resource deps UsersResource request query)]
       (is (nil?
             (-> fetched :_documents first :password)))))
-  )
+
+  (testing "embedding users in comments"
+    (load-fixtures)
+    (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
+      (doseq [i (take (count (:_documents fetched)) (range))]
+        (is (= #{:_id :username}
+               (-> fetched (get-in [:_documents i :user]) keys set))))))
+
+  (testing "embedding comments in user"
+    (load-fixtures)
+    (let [fetched (read-resource deps UsersResource
+                                 {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+                                 {:find {:_id "aaaaaaaaaaaaaaaaaaaaaaa1"} :relations {(keyword "comments.[]") {}}})]
+      (doseq [i (take (count (:_documents fetched)) (range))]
+        (is (= #{:_id :user :text}
+               (-> fetched (get-in [:_documents i :comments]) first keys set)))))))
