@@ -4,7 +4,8 @@
             [grape.query :refer [validate-query]]
             [grape.fixtures]
             [grape.fixtures :refer :all])
-  (:import (clojure.lang ExceptionInfo)))
+  (:import (clojure.lang ExceptionInfo)
+           (org.bson.types ObjectId)))
 
 ;; TODO test relations not existing
 ;; TODO test pagination null
@@ -18,7 +19,7 @@
       (is (thrown? ExceptionInfo (validate-query deps CommentsResource request query {:recur? true})))))
 
   (testing "query for public comments should not inject auth filter"
-    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
           fetched (read-resource deps CommentsResource request {})]
       (is (nil? (get-in fetched [:_query :find :_id])))))
 
@@ -53,12 +54,12 @@
 
   (testing "users fetching should not show password field"
     (load-fixtures)
-    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
           query {}
           fetched (read-resource deps UsersResource request query)]
       (is (nil?
             (-> fetched :_documents first :password))))
-    (let [request {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+    (let [request {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
           query {:fields [:password :username]}
           fetched (read-resource deps UsersResource request query)]
       (is (nil?
@@ -74,8 +75,46 @@
   (testing "embedding comments in user"
     (load-fixtures)
     (let [fetched (read-resource deps UsersResource
-                                 {:auth {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}}
+                                 {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
                                  {:find {:_id "aaaaaaaaaaaaaaaaaaaaaaa1"} :relations {(keyword "comments.[]") {}}})]
       (doseq [i (take (count (:_documents fetched)) (range))]
         (is (= #{:_id :user :text}
-               (-> fetched (get-in [:_documents i :comments]) first keys set)))))))
+               (-> fetched (get-in [:_documents i :comments]) first keys set))))))
+
+  (testing "embedding replies in comment"
+    (load-fixtures)
+    (let [inserted1 (create-resource deps CommentsResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:text "reply 1" :parent "ccccccccccccccccccccccc1"})
+          inserted2 (create-resource deps CommentsResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:text "reply 2" :parent "ccccccccccccccccccccccc1"})
+          inserted3 (create-resource deps CommentsResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:text "reply 3" :parent "ccccccccccccccccccccccc1"})
+          inserted4 (create-resource deps CommentsResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:text "reply 4" :parent "ccccccccccccccccccccccc1"})
+          fetched (read-resource deps CommentsResource
+                                 {}
+                                 {:find {:_id "ccccccccccccccccccccccc1"} :relations {(keyword "last_replies.[]") {}}})]
+      (doseq [i (take (count (:_documents fetched)) (range))
+              :when (> (inc i) 1)]
+        (is (= {:text (str "reply " (inc i))
+                :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")
+                :parent (ObjectId. "ccccccccccccccccccccccc1")}
+               (-> fetched (get-in [:_documents i]) (select-keys [:text :user :parent])))))))
+
+  (testing "embedding likes in comment"
+    (load-fixtures)
+    (let [_ (create-resource deps LikesResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:comment "ccccccccccccccccccccccc1"})
+          _ (create-resource deps LikesResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}} {:comment "ccccccccccccccccccccccc1"})
+          fetched (read-resource deps CommentsResource
+                                 {}
+                                 {:find {:_id "ccccccccccccccccccccccc1"} :relations {(keyword "likes.[]") {}}})]
+      (is (= {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")
+              :comment (ObjectId. "ccccccccccccccccccccccc1")}
+             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user]))))))
+
+  (testing "embedding likes in comment"
+    (load-fixtures)
+    (let [_ (create-resource deps LikesResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:comment "ccccccccccccccccccccccc1"})
+          _ (create-resource deps LikesResource {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}} {:comment "ccccccccccccccccccccccc1"})
+          fetched (read-resource deps CommentsResource
+                                 {}
+                                 {:find {:_id "ccccccccccccccccccccccc1"} :relations {(keyword "likes.[]") {}}})]
+      (is (= {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")
+              :comment (ObjectId. "ccccccccccccccccccccccc1")}
+             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user])))))))

@@ -8,75 +8,108 @@
             [ring.adapter.jetty :refer [run-jetty]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
-            [ring.middleware.cors :refer [wrap-cors]])
+            [ring.middleware.cors :refer [wrap-cors]]
+            [monger.collection :as mc])
   (:gen-class))
 
 (def db (mg/get-db (mg/connect) "commentthread"))
 
 (def UsersResource
   {:datasource        {:source "users"}
-   :schema            {(? :_id)   ObjectId
-                       (? :index) (Field Int
-                                         [[#(<= 0 % 10) "length-0-10"]
-                                          [even? "should-be-even"]])
-                       :username  #"^[A-Za-z0-9_ ]{2,25}$"
-                       (? :website)
-                                  (maybe UrlField)
-                       (? :_created)
-                                  (read-only DateTime)
-                       (? :_updated)
-                                  (read-only DateTime)}
+   :type              'User
+   :schema            {(? :_id)      ObjectId
+                       :username     (Field Str
+                                            #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
+                                            "username-should-be-valid")
+                       :email        EmailField
+                       :password     (write-only Str)
+                       (? :comments) (read-only [(ResourceJoin :comments :user 'Comment)])
+                       (? :friends)  [(ResourceField ObjectId :users)]
+                       (? :_created) (read-only DateTime)
+                       (? :_updated) (read-only DateTime)}
    :url               "users"
    :operations        #{:create :read :update :delete}
    :public-operations #{:create}
    :auth-strategy     {:type       :field
-                       :auth-field :user-id                 ;; extracted from a jwt token for example
-                       :doc-field  :_id}})
+                       :auth-field :user
+                       :doc-field  :_id}
+   :item-aliases      [["me" (fn [deps resource request]
+                               (get-in request [:auth :user]))]]})
 
+; public-users is a view of the users collection
+; read only and safe for public exposure
 (def PublicUsersResource
-  {:datasource        {:source "users"}
-   :schema            {}
-   :fields            #{:_id :username}
-   :url               "public_users"
-   :operations        #{:read}
-   :public-operations #{:read}})
+  {:datasource {:source "users"}
+   :type       'User
+   :schema     {:_id      Str
+                :username Str}
+   :url        "public_users"
+   :operations #{:read}})
 
 (def CommentsResource
   {:datasource        {:source "comments"}
-   :schema            {(? :_id)      ObjectId
-                       :user         (ResourceField ObjectId :public-users)
-                       :text         Str
-                       (? :_created) (read-only DateTime)
-                       (? :_updated) (read-only DateTime)}
+   :type              'Comment
+   :schema            {(? :_id)          ObjectId
+                       :user             (ResourceField ObjectId :public-users)
+                       :text             Str
+                       (? :parent)       (maybe (ResourceField ObjectId :comments))
+                       (? :last_replies) (read-only [(ResourceField ObjectId :comments)])
+                       (? :likes)        (read-only [(ResourceJoin :likes :comment 'Like)])
+                       (? :statistics)   (read-only {:likes Int})
+                       (? :_created)     (read-only DateTime)
+                       (? :_updated)     (read-only DateTime)}
    :url               "comments"
    :operations        #{:create :read :update :delete}
    :public-operations #{:read}
    :auth-strategy     {:type       :field
-                       :auth-field :user-id
-                       :doc-field  :user}})
+                       :auth-field :user
+                       :doc-field  :user}
+   :soft-delete       true
+   :post-create       (fn [deps resource request payload]
+                        ; If this is a reply
+                        ; maintain an array of the three last replies on it
+                        ; to optimize fetching
+                        (when-let [parent (:parent payload)]
+                          (mc/update (get-in deps [:store :db]) "comments"
+                                     {:_id parent}
+                                     {:$push {:last_replies
+                                              {:$each  [(:_id payload)]
+                                               :$slice -3}}}))
+                        payload)})
 
 (def LikesResource
   {:datasource        {:source "likes"}
-   :schema            {(? :_id)      ObjectId
-                       :user         (ResourceField ObjectId :public-users)
-                       :comment      (ResourceField ObjectId :comments)
-                       (? :_created) (read-only DateTime)
-                       (? :_updated) (read-only DateTime)}
+   :type              'Like
+   :schema            {(? :_id) ObjectId
+                       :user    (ResourceField ObjectId :public-users)
+                       :comment (ResourceField ObjectId :comments)}
    :url               "likes"
    :operations        #{:create :read :delete}
    :public-operations #{:read}
    :auth-strategy     {:type       :field
-                       :auth-field :user-id
-                       :doc-field  :user}})
+                       :auth-field :user
+                       :doc-field  :user}
+   :post-create       (fn [deps resource request payload]
+                        ; update the like counter on the corresponding comment
+                        (mc/update (get-in deps [:store :db]) "comments"
+                                   {:_id (:comment payload)}
+                                   {:$inc {:statistics.likes 1}})
+                        payload)})
 
 (def OplogResource
   {:datasource    {:source "oplog"}
    :url           "oplog"
-   :schema        {}
+   :schema        {:_id  ObjectId
+                   :o    Str
+                   :s    Str
+                   :i    Str
+                   :c    Any
+                   :af   Str
+                   :auth Any
+                   :at   DateTime}
    :operations    #{:read}
-   :fields        #{:_id :o :s :i :c :af :auth :at}
    :auth-strategy {:type       :field
-                   :auth-field :user-id
+                   :auth-field :user
                    :doc-field  :af}})
 
 (def deps {:config             {:default-language "fr"      ;; Errors are translated
@@ -101,4 +134,4 @@
       wrap-params))
 
 (defn -main [& args]
-  (run-jetty grape-handler {:port 3000}))
+  (run-jetty grape-handler {:port 8080}))

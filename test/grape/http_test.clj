@@ -1,6 +1,8 @@
 (ns grape.http-test
   (:require [clojure.test :refer :all]
-            [grape.http :refer :all]))
+            [grape.http :refer :all]
+            [grape.schema :refer [ObjectId Any]]
+            [schema.core :as s]))
 
 ;; token generated with jwt.io
 ;; {"aud": "api", "user-id": "57503897eeb06b64ada8fa08"}
@@ -10,7 +12,7 @@
   (testing "request is correctly enriched"
     (let [request {:query-params {"access_token" token}}
           ;; we setup a simple handler that responds with the incoming request
-          handler (wrap-jwt-auth identity {:audience "api" :secret "secret"})
+          handler (wrap-jwt-auth identity {:audience "api" :secret "secret" :auth-schema {:user-id ObjectId s/Any s/Any}})
           response (handler request)]
-      (is (= "57503897eeb06b64ada8fa08" (get-in response [:auth :user-id]))))
+      (is (= (org.bson.types.ObjectId. "57503897eeb06b64ada8fa08") (get-in response [:auth :user-id]))))
     ))

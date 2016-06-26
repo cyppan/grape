@@ -17,7 +17,8 @@
                "comments" [{:_id (org.bson.types.ObjectId. "ccccccccccccccccccccccc1") :user (org.bson.types.ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :text "this company is cool" :extra "extra field"}
                            {:_id (org.bson.types.ObjectId. "ccccccccccccccccccccccc2") :user (org.bson.types.ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "love you guys :D"}
                            {:_id (org.bson.types.ObjectId. "ccccccccccccccccccccccc3") :user (org.bson.types.ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "spam"}
-                           {:_id (org.bson.types.ObjectId. "ccccccccccccccccccccccc4") :user (org.bson.types.ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "has been deleted" :_deleted true}]})
+                           {:_id (org.bson.types.ObjectId. "ccccccccccccccccccccccc4") :user (org.bson.types.ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "has been deleted" :_deleted true}]
+               "likes"    []})
 
 (def store-inst
   (store/map->MongoDataSource {:db db}))
@@ -105,7 +106,8 @@
                         payload)})
 
 (def config {:default-paginate {:per-page 10}
-             :default-sort     {:sort {:_created -1}}})
+             :default-sort     {:sort {:_created -1}}
+             :auth-schema      {:user ObjectId}})
 
 (def deps {:store              store-inst
            :resources-registry {:users        UsersResource

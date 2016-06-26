@@ -75,9 +75,9 @@
                                                 relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
                                                 embedded? (when relation-spec (= :embedded (:type relation-spec)))
                                                 relation-q (if embedded?
-                                                             (merge relation-q {:opts {:count?    false
-                                                                                       :paginate? false
-                                                                                       :sort?     false}})
+                                                             (deep-merge relation-q {:opts {:count?    false
+                                                                                            :paginate? false
+                                                                                            :sort?     false}})
                                                              (deep-merge relation-q {:opts {:count? false}}))]
                                           :when (and relation-spec relation-res)]
                                       {relation-key (if recur?

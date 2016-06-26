@@ -3,7 +3,8 @@
   and auth middleware"
   (:require [com.stuartsierra.component :as component]
             [schema.core :as s]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [grape.schema :as gs])
   (:use org.httpkit.server)
   (:import (com.auth0.jwt JWTVerifier)))
 
@@ -24,16 +25,20 @@
 
 (defn wrap-jwt-auth [handler config]
   (let [{:keys [audience secret]} config
-        verifier (JWTVerifier. secret audience)]
+        verifier (JWTVerifier. secret audience)
+        auth-schema (:auth-schema config)]
+    (assert auth-schema "missing auth-schema key in config")
     (fn [request]
       (if-let [token (get-in request [:query-params "access_token"])]
         (try
           (let [claims (.verify verifier token)]
             (->> (into {} claims)
                  clojure.walk/keywordize-keys
+                 (#(gs/validate % auth-schema))
                  (assoc request :auth)
                  handler))
-          (catch Exception _ (handler request)))
+          (catch Exception ex
+            (handler request)))
         (handler request)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
