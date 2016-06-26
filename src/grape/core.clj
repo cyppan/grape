@@ -28,13 +28,14 @@
   (let [rel-path (map (fn [part]
                         (if (= part "[]") [] (keyword part)))
                       (clojure.string/split (name rel-key) #"\."))
+        specter-path (map #(if (= % []) ALL %) rel-path)
         rel-spec (get (get-schema-relations (:schema resource)) rel-path)
         rel-resource (get-in deps [:resources-registry (:resource rel-spec)])
         docs @docs*]
     (match [(:type rel-spec) (boolean (or (:paginate rel-query) (:sort rel-query)))]
            [:embedded _]
            (let [;; First collect every id to fetch
-                 rel-ids (distinct (mapcat #(select rel-path %) (map second docs)))
+                 rel-ids (distinct (mapcat #(select specter-path %) (map second docs)))
                  ;; build a map of ids to fetched documents
                  rel-docs-by-id (->> (:_documents
                                        (read-resource deps rel-resource request
@@ -42,18 +43,20 @@
                                      (map #(vector (:_id %) %))
                                      (into {}))]
              (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id] #(transform rel-path rel-docs-by-id %))))
+               (swap! docs* update-in [doc-id] #(transform specter-path rel-docs-by-id %))))
            [:join false]
            (let [arity-single? (not= (last rel-path) [])
                  rel-ids (map first docs)
                  rel-field (:field rel-spec)
                  rel-docs-by-field (->> (:_documents
                                           (read-resource deps rel-resource request
-                                                         (update-in rel-query [:find] #(merge % {rel-field {"$in" rel-ids}}))))
+                                                         (update-in rel-query [:find]
+                                                                    #(merge % {rel-field {"$in" rel-ids}}))))
                                         (group-by rel-field))]
              (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id] #(transform rel-path (constantly (-> (rel-docs-by-field doc-id)
-                                                                                    (?> arity-single? first))) %))))
+               (swap! docs* update-in [doc-id]
+                      #(transform (drop-last specter-path) (constantly (-> (rel-docs-by-field doc-id)
+                                                                           (?> arity-single? first))) %))))
            [:join true]
            ;; no optimization possible, we do parallely, and given the threadpool, the fetching for each document
            (let [rel-ids (map first docs)
@@ -62,11 +65,13 @@
                                                  (fn [id]
                                                    [id (:_documents
                                                          (read-resource deps rel-resource request
-                                                                        (update-in rel-query [:find] #(merge % {rel-field id}))))])
+                                                                        (update-in rel-query [:find]
+                                                                                   #(merge % {rel-field id}))))])
                                                  rel-ids)
                                         (into {}))]
              (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id] #(transform rel-path (constantly (rel-docs-by-field doc-id)) %))))
+               (swap! docs* update-in [doc-id]
+                      #(transform (drop-last specter-path) (constantly (rel-docs-by-field doc-id)) %))))
            )))
 
 (defn read-resource [{:keys [store hooks] :as deps} resource request query]
@@ -74,17 +79,18 @@
         query (pre-read-fn deps resource request query)
         query (validate-query deps resource request query {:recur? false})
         {:keys [relations]} query
-        docs* (atom (->> (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
-                         (map #(vector (:_id %) %))
-                         (into {})))
         count? (get-in query [:opts :count?])
         count (when count?
-                (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))]
+                (future
+                  (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})))
+        docs* (atom (->> (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
+                         (map #(vector (:_id %) %))
+                         (into {})))]
     (when (seq relations)
       (cp/pdoseq pool
                  [[rel-key rel-query] relations]
                  (read-relation deps resource request docs* rel-key rel-query)))
-    (->> {:_count     count
+    (->> {:_count     (when count @count)
           :_query     query
           :_documents (into [] (map second @docs*))}
          (post-read-fn deps resource request))))
