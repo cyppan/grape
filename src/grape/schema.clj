@@ -154,6 +154,9 @@
 (def PositiveInt
   (Field Int #(>= % 0) (str "field-should-be-positive-integer")))
 
+(def StrictPositiveInt
+  (Field Int #(> % 0) (str "field-should-be-strict-positive-integer")))
+
 (def url-valid?
   (partial re-matches #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&|\'()*+,#;=.~_-]*)?$"))
 
