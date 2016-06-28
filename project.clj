@@ -19,7 +19,7 @@
                  [com.stuartsierra/component "0.3.1"]
                  [http-kit "2.1.19"]
                  [com.auth0/java-jwt "2.1.0"]
-                 [com.rpl/specter "0.11.2"]
+                 [com.rpl/specter "0.12.0-SNAPSHOT"]
                  [com.climate/claypoole "1.1.2"]]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl {:main dev}
