@@ -63,7 +63,10 @@
    (wrap-auth :read (fn [auth-value doc-field query]
                       (update-in query [:find]
                                  (fn [find]
-                                   (let [existing-value (doc-field find)]
+                                   (let [existing-value (doc-field find)
+                                         existing-value (if (and (get existing-value "$in") (= 1 (count (get existing-value "$in"))))
+                                                          (first (get existing-value "$in"))
+                                                          existing-value)]
                                      (if (and existing-value (not= (str existing-value) (str auth-value)))
                                        (throw (ex-info "Forbidden" {:type :forbidden}))
                                        (merge find {doc-field auth-value})))))))})
