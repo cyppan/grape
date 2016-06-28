@@ -37,7 +37,7 @@
         (and resource-method? (= method :get))
         (->> request
              parse-query
-             (#(update-in % [:opts] (fn [opts] (merge opts {:count? true :paginate? true}))))
+             (#(update-in % [:opts] (fn [opts] (merge {:count? false} opts {:paginate? true}))))
              (read-resource deps resource request)
              (assoc {:status 200} :body)
              format-eve-response)
