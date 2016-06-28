@@ -86,10 +86,14 @@
         {:status 500 :body {:_status "ERR" :_message "an unexpected error occured"}}))))
 
 (defn build-resource-routes [deps resource]
-  (let [item-aliases (:item-aliases resource {})]
+  (let [item-aliases (:item-aliases resource {})
+        resource-url (:url resource)
+        item-url (if (vector? resource-url)
+                   (conj resource-url "/" :_id)
+                   [resource-url "/" :_id])]
     (into []
-          (concat [[(:url resource) (partial rest-resource-handler deps resource)]
-                   [[(:url resource) "/" :_id] (partial rest-resource-handler deps resource)]]
+          (concat [[resource-url (partial rest-resource-handler deps resource)]
+                   [item-url (partial rest-resource-handler deps resource)]]
                   (for [[route-path handler] item-aliases]
                     [route-path (fn [request]
                                   (->> (handler deps resource request)

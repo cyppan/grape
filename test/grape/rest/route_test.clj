@@ -21,6 +21,19 @@
       (is (not (nil? (:handler resource-match))))
       (is (= "1234" (get-in item-match [:route-params :_id])))))
 
+  (testing "get resource handler with vector url"
+    (load-fixtures)
+    (let [resource {:url        ["prefix/" :prefix "/myresource"]
+                    :operations #{:read}}
+          routes ["/" (build-resources-routes {:resources-registry {:myresource resource}})]
+          resource-match (match-route routes "/prefix/toto/myresource")
+          item-match (match-route routes "/prefix/toto/myresource/1234")]
+      (is (nil? (match-route routes "/unknown")))
+      (is (not (nil? (:handler resource-match))))
+      (is (= "toto" (get-in resource-match [:route-params :prefix])))
+      (is (= "toto" (get-in item-match [:route-params :prefix])))
+      (is (= "1234" (get-in item-match [:route-params :_id])))))
+
   (testing "get resource handler with extra endpoints"
     (load-fixtures)
     (let [resource {:url          "myresource"
