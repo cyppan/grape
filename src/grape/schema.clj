@@ -26,26 +26,28 @@
 (def ^:dynamic *request* {})
 
 (def errors-translations
-  {:en {"missing-required-key"         "the field is required"
-        "disallowed-key"               "extra fields not allowed"
-        "type-invalid"                 "invalid type"
-        #"type-should-be-(.*)"         "The field should be of type %s"
-        "url-should-be-valid"          "the url should be valid"
-        "read-only"                    "the field is read-only"
-        "resource-should-exist"        "the resource should exist"
-        "email-should-be-valid"        "the email should be valid"
-        #"length-([0-9]+)-([0-9]+)"    "field length should be between %s and %s characters long"
-        #"value-should-be-one-of-(.*)" "the value should be one of %s"}
-   :fr {"missing-required-key"         "le champ est requis"
-        "disallowed-key"               "les champs supplémentaires ne sont pas autorisés"
-        "type-invalid"                 "type invalide"
-        #"type-should-be-(.*)"         "Le champ doit être de type %s"
-        "url-should-be-valid"          "L'url doit être valide"
-        "read-only"                    "le champ est en lecture seule"
-        "resource-should-exist"        "la ressource doit exister"
-        "email-should-be-valid"        "l'email doit être valide"
-        #"length-([0-9]+)-([0-9]+)"    "le champ doit faire entre %s et %s caractères"
-        #"value-should-be-one-of-(.*)" "la valeur doit être l'une des valeurs suivantes : %s"}})
+  {:en {"missing-required-key"             "the field is required"
+        "disallowed-key"                   "extra fields not allowed"
+        "type-invalid"                     "invalid type"
+        #"type-should-be-(.*)"             "The field should be of type %s"
+        "url-should-be-valid"              "the url should be valid"
+        "read-only"                        "the field is read-only"
+        "resource-should-exist"            "the resource should exist"
+        "email-should-be-valid"            "the email should be valid"
+        #"length-([0-9]+)-([0-9]+)"        "field length should be between %s and %s characters long"
+        #"value-should-be-one-of-(.*)"     "the value should be one of %s"
+        "field-should-be-positive-integer" "the field should be a positive integer"}
+   :fr {"missing-required-key"             "le champ est requis"
+        "disallowed-key"                   "les champs supplémentaires ne sont pas autorisés"
+        "type-invalid"                     "type invalide"
+        #"type-should-be-(.*)"             "Le champ doit être de type %s"
+        "url-should-be-valid"              "L'url doit être valide"
+        "read-only"                        "le champ est en lecture seule"
+        "resource-should-exist"            "la ressource doit exister"
+        "email-should-be-valid"            "l'email doit être valide"
+        #"length-([0-9]+)-([0-9]+)"        "le champ doit faire entre %s et %s caractères"
+        #"value-should-be-one-of-(.*)"     "la valeur doit être l'une des valeurs suivantes : %s"
+        "field-should-be-positive-integer" "le champ doit être un entier positif"}})
 
 (defn translate-error [err]
   (let [{:keys [config translations]} *deps*
@@ -148,6 +150,9 @@
 
 (defn SizedField [type min max]
   (Field type #(<= min (count %) max) (str "length-" min "-" max)))
+
+(def PositiveInt
+  (Field Int #(>= % 0) (str "field-should-be-positive-integer")))
 
 (def url-valid?
   (partial re-matches #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&|\'()*+,#;=.~_-]*)?$"))
