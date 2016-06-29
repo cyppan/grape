@@ -18,7 +18,7 @@
 
 (def Query
   {(? :find)      (s/maybe {StrOrKeyword s/Any})
-   (? :fields)    (s/maybe [s/Keyword])
+   (? :fields)    (s/maybe [StrOrKeyword])
    (? :sort)      (s/maybe {StrOrKeyword (s/enum 1 -1)})
    (? :paginate)  (s/maybe {(? :page)     (s/maybe s/Int)
                             (? :per-page) (s/maybe s/Int)})
