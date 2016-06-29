@@ -11,7 +11,8 @@
             [monger.util :refer [object-id]]
             [clj-time.core :as t]
             [clj-time.format :as f]
-            [clojure.tools.logging :refer [log]])
+            [clojure.tools.logging :refer [log]]
+            [schema-tools.core.impl :as stc-impl])
   (:import (clojure.lang ExceptionInfo ISeq)
            (schema.utils ValidationError)
            (schema.core Predicate Constrained Maybe)
@@ -164,6 +165,8 @@
 
 (defn EnumField [type enum-set]
   (Field type (into #{} enum-set) (str "value-should-be-one-of-" (clojure.string/join ", " enum-set))))
+
+(def default stc-impl/default)
 
 (def object-id-matcher
   {ObjectId (coerce/safe #(object-id ^String %))})
