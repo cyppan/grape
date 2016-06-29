@@ -219,7 +219,9 @@
   (let [relations (volatile! {})]                           ; No need for the atom atomicity guarantees here
     (doseq [[path metadata] (flatten-structure (walk-schema schema s/explicit-schema-key #(FieldMeta. (meta %))))
             :let [relation-spec (:grape/relation-spec (.-metadata metadata))
-                  path (into [] path)]
+                  path (into [] path)
+                  ;; the user should be able to specify the relations using the flatten syntax "comments" and not "comments.[]"
+                  spec-path (into [] (filter (partial not= []) path))]
             :when relation-spec]
       ;; when relation is an embedded there is no restriction for defining the relation in embedded fields or in arrays
       ;; but when it's a join, array are not authorized except for wrapping the join (corresponds to a join many)
@@ -228,7 +230,7 @@
                              drop-last
                              (filter sequential?)))
                 "schema error: relation spec join in an object having a parent array in not supported"))
-      (vswap! relations assoc path relation-spec))
+      (vswap! relations assoc path (assoc relation-spec :path spec-path)))
     @relations))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

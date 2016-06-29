@@ -71,7 +71,12 @@
                                                                      (if (= part "[]")
                                                                        []
                                                                        (keyword part))) (clojure.string/split (name relation-key) #"\."))
-                                                relation-spec (get (get-schema-relations (:schema resource)) relation-path)
+                                                relation-spec (->> (get-schema-relations (:schema resource))
+                                                                   (filter (fn [[path spec]]
+                                                                             (or (= relation-path path)
+                                                                                 (= relation-path (:path spec)))))
+                                                                   first
+                                                                   second)
                                                 relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
                                                 embedded? (when relation-spec (= :embedded (:type relation-spec)))
                                                 relation-q (if embedded?

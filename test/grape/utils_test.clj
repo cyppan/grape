@@ -112,8 +112,8 @@
                                          merge {:grape/relation-spec
                                                 spec-two})])}
           relations (get-schema-relations schema)]
-      (is (= relations {[:one] spec-one
-                        [:two []] spec-two}))))
+      (is (= relations {[:one] (assoc spec-one :path [:one])
+                        [:two []] (assoc spec-two :path [:two])}))))
   (testing "array relation"
     (let [spec {:type     :embedded
                 :resource :sample}
@@ -121,7 +121,7 @@
                                            merge {:grape/relation-spec
                                                   spec})}]}
           relations (get-schema-relations schema)]
-      (is (= relations {[:seq [] :field] spec}))))
+      (is (= relations {[:seq [] :field] (assoc spec :path [:seq :field])}))))
   (testing "join in a root array is not supported"
     (let [spec {:type     :join
                 :resource :other
@@ -140,4 +140,4 @@
                                    merge {:grape/relation-spec
                                           spec})]}
           relations (get-schema-relations schema)]
-      (is (= relations {[:seq []] spec})))))
+      (is (= relations {[:seq []] (assoc spec :path [:seq])})))))
