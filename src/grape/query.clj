@@ -71,12 +71,12 @@
                                                                      (if (= part "[]")
                                                                        []
                                                                        (keyword part))) (clojure.string/split (name relation-key) #"\."))
-                                                relation-spec (->> (get-schema-relations (:schema resource))
-                                                                   (filter (fn [[path spec]]
-                                                                             (or (= relation-path path)
-                                                                                 (= relation-path (:path spec)))))
-                                                                   first
-                                                                   second)
+                                                [relation-path relation-spec] (->> (get-schema-relations (:schema resource))
+                                                                                   (filter (fn [[path spec]]
+                                                                                             (or (= relation-path path)
+                                                                                                 (= relation-path (:path spec)))))
+                                                                                   first)
+                                                relation-key (keyword (clojure.string/join "." (map #(if (vector? %) "[]" (name %)) relation-path)))
                                                 relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
                                                 embedded? (when relation-spec (= :embedded (:type relation-spec)))
                                                 relation-q (if embedded?
@@ -86,5 +86,5 @@
                                                              (deep-merge relation-q {:opts {:count? false}}))]
                                           :when (and relation-spec relation-res)]
                                       {relation-key (if recur?
-                                                      (validate-query deps relation-res request relation-q {:recur? true})
-                                                      relation-q)}))})))
+                                                       (validate-query deps relation-res request relation-q {:recur? true})
+                                                       relation-q)}))})))
