@@ -113,8 +113,10 @@
                    :doc-field  :af}})
 
 (def deps {:config             {:default-language "fr"      ;; Errors are translated
-                                :jwt              {:audience "api"
-                                                   :secret   "secret"}}
+                                :jwt              {:audience    "api"
+                                                   :secret      "secret"
+                                                   :auth-schema {:user ObjectId
+                                                                 Any   Any}}}
            :translations       {:en {"should-be-even" "the field should be even"}
                                 :fr {"should-be-even" "le champ doit être pair"}}
            :hooks              hooks

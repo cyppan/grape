@@ -21,7 +21,9 @@
    (? :fields)    (s/maybe [StrOrKeyword])
    (? :sort)      (s/maybe {StrOrKeyword (s/enum 1 -1)})
    (? :paginate)  (s/maybe {(? :page)     (s/maybe s/Int)
-                            (? :per-page) (s/maybe s/Int)})
+                            (? :per-page) (s/maybe s/Int)
+                            (? :skip)     (s/maybe s/Int)
+                            (? :limit)    (s/maybe s/Int)})
    (? :opts)      (s/maybe {(? :count?)    s/Bool
                             (? :paginate?) s/Bool
                             (? :sort?)     s/Bool})
@@ -86,5 +88,5 @@
                                                              (deep-merge relation-q {:opts {:count? false}}))]
                                           :when (and relation-spec relation-res)]
                                       {relation-key (if recur?
-                                                       (validate-query deps relation-res request relation-q {:recur? true})
-                                                       relation-q)}))})))
+                                                      (validate-query deps relation-res request relation-q {:recur? true})
+                                                      relation-q)}))})))

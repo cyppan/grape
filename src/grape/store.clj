@@ -40,15 +40,20 @@
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
                  find)
           {:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
-          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
+          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)
+          skip-limit? (and paginate? (:limit paginate))]
       (mq/with-collection
         db source
         (mq/find find)
         (merge (if fields (mq/partial-query (mq/fields fields)) {}))
         (merge (if (and sort? sort) (mq/partial-query (mq/sort sort)) {}))
-        (merge (if paginate?
+        (merge (if (and paginate? (not skip-limit?))
                  (mq/partial-query (mq/paginate :page (:page (or paginate {}) 1) :per-page (:per-page (or paginate {}) 50)))
-                 {})))))
+                 {}))
+        (merge (if (and paginate? (:skip paginate))
+                 (mq/partial-query (mq/skip (:skip paginate)))))
+        (merge (if (and paginate? (:limit paginate))
+                 (mq/partial-query (mq/limit (:limit paginate))))))))
   (count [_ source {:keys [find]} {:keys [soft-delete?] :as opts}]
     (let [find (if soft-delete?
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
