@@ -15,7 +15,7 @@
             [schema-tools.core.impl :as stc-impl])
   (:import (clojure.lang ExceptionInfo ISeq)
            (schema.utils ValidationError)
-           (schema.core Predicate Constrained Maybe)
+           (schema.core Predicate Constrained Maybe Both)
            (java.util UnknownFormatConversionException)
            (java.util.regex Pattern)
            (schema.spec.leaf LeafSpec)
@@ -91,10 +91,10 @@
 (defn Field
   ([type]
    type)
-  ([type valid? ^String error-key]
-   (vary-meta (s/constrained type valid? error-key) merge (meta type)))
   ([type ^ISeq validation-pairs]
-   (vary-meta (apply s/both (map #(Field type (first %) (second %)) validation-pairs)) merge (meta type))))
+   (vary-meta (apply s/both (map #(Field type (first %) (second %)) validation-pairs)) merge (meta type)))
+  ([type valid? ^String error-key]
+   (vary-meta (s/constrained type valid? error-key) merge (meta type))))
 
 (defn resource-exists? [resource-key]
   (fn [id]
@@ -188,6 +188,8 @@
             (:schema s)
             (instance? WriteOnly s)
             (with-meta (:schema s) {:grape/write-only true})
+            (instance? Both s)
+            (first (.-schemas s))
             :else
             s)
         spec (s/spec s)]
@@ -258,13 +260,13 @@
                     (= (.-fail-explanation el) 'read-only))
                (translate-error "read-only")
                (and (instance? ValidationError el)
-                    (= (.-fail-explanation el) 'not)
                     (instance? Predicate (.-schema el)))
                (translate-error (:pred-name (.-schema el)))
                (and (instance? ValidationError el)
-                    (= (.-fail-explanation el) 'not)
                     (instance? Constrained (.-schema el)))
-               (translate-error (:post-name (.-schema el)))
+               (if (vector? (:post-name (.-schema el)))
+                 (translate-error (second (:post-name (.-schema el))))
+                 (translate-error (:post-name (.-schema el))))
                (symbol? el)
                (translate-error (str el))
                (and (instance? ValidationError el)
