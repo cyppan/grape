@@ -86,7 +86,7 @@
         docs* (atom (->> (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
                          (map #(vector (:_id %) %))
                          (into {})))]
-    (when (seq relations)
+    (when (and (clojure.core/count @docs*) (seq relations))
       (cp/pdoseq pool
                  [[rel-key rel-query] relations]
                  (read-relation deps resource request docs* rel-key rel-query)))
