@@ -55,8 +55,15 @@
                                         (group-by rel-field))]
              (doseq [[doc-id _] docs]
                (swap! docs* update-in [doc-id]
-                      #(transform (drop-last specter-path) (constantly (-> (rel-docs-by-field doc-id)
-                                                                           (?> arity-single? first))) %))))
+                      #(transform (drop-last specter-path) (constantly
+                                                             (if (vector? (first (keys rel-docs-by-field))) ;; rel-field is an array
+                                                               (->> rel-docs-by-field
+                                                                    (filter (fn [[k _]]
+                                                                              (first (filter (fn [el] (= el doc-id)) k))))
+                                                                    first
+                                                                    second)
+                                                               (-> (rel-docs-by-field doc-id)
+                                                                   (?> arity-single? first)))) %))))
            [:join true]
            ;; no optimization possible, we do parallely, and given the threadpool, the fetching for each document
            (let [rel-ids (map first docs)
