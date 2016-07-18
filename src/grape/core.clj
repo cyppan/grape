@@ -11,8 +11,10 @@
             [clj-time.format :as f]
             [com.rpl.specter :refer :all]
             [com.rpl.specter.macros :refer :all]
-            [com.climate.claypoole :as cp])
-  (:import (org.joda.time DateTime)))
+            [com.climate.claypoole :as cp]
+            [clojure.tools.logging :as log])
+  (:import (org.joda.time DateTime)
+           (clojure.lang ExceptionInfo)))
 
 (add-encoder DateTime (fn [d jsonGenerator]
                         (let [formatter (f/formatters :date-time)
@@ -32,54 +34,59 @@
         rel-spec (get (get-schema-relations (:schema resource)) rel-path)
         rel-resource (get-in deps [:resources-registry (:resource rel-spec)])
         docs @docs*]
-    (match [(:type rel-spec) (boolean (or (:paginate rel-query) (:sort rel-query)))]
-           [:embedded _]
-           (let [;; First collect every id to fetch
-                 rel-ids (distinct (mapcat #(select specter-path %) (map second docs)))
-                 ;; build a map of ids to fetched documents
-                 rel-docs-by-id (->> (:_documents
-                                       (read-resource deps rel-resource request
-                                                      (update-in rel-query [:find] #(merge % {:_id {"$in" rel-ids}}))))
-                                     (map #(vector (:_id %) %))
-                                     (into {}))]
-             (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id] #(transform specter-path rel-docs-by-id %))))
-           [:join false]
-           (let [arity-single? (not= (last rel-path) [])
-                 rel-ids (map first docs)
-                 rel-field (:field rel-spec)
-                 rel-docs-by-field (->> (:_documents
-                                          (read-resource deps rel-resource request
-                                                         (update-in rel-query [:find]
-                                                                    #(merge % {rel-field {"$in" rel-ids}}))))
-                                        (group-by rel-field))]
-             (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id]
-                      #(transform (drop-last specter-path) (constantly
-                                                             (if (vector? (first (keys rel-docs-by-field))) ;; rel-field is an array
-                                                               (->> rel-docs-by-field
-                                                                    (filter (fn [[k _]]
-                                                                              (first (filter (fn [el] (= el doc-id)) k))))
-                                                                    first
-                                                                    second)
-                                                               (-> (rel-docs-by-field doc-id)
-                                                                   (?> arity-single? first)))) %))))
-           [:join true]
-           ;; no optimization possible, we do parallely, and given the threadpool, the fetching for each document
-           (let [rel-ids (map first docs)
-                 rel-field (:field rel-spec)
-                 rel-docs-by-field (->> (cp/pmap pool
-                                                 (fn [id]
-                                                   [id (:_documents
-                                                         (read-resource deps rel-resource request
-                                                                        (update-in rel-query [:find]
-                                                                                   #(merge % {rel-field id}))))])
-                                                 rel-ids)
-                                        (into {}))]
-             (doseq [[doc-id _] docs]
-               (swap! docs* update-in [doc-id]
-                      #(transform (drop-last specter-path) (constantly (rel-docs-by-field doc-id)) %))))
-           )))
+    (try
+      (match [(:type rel-spec) (boolean (or (:paginate rel-query) (:sort rel-query)))]
+             [:embedded _]
+             (let [;; First collect every id to fetch
+                   rel-ids (distinct (mapcat #(select specter-path %) (map second docs)))
+                   ;; build a map of ids to fetched documents
+                   rel-docs-by-id (->> (:_documents
+                                         (read-resource deps rel-resource request
+                                                        (update-in rel-query [:find] #(merge % {:_id {"$in" rel-ids}}))))
+                                       (map #(vector (:_id %) %))
+                                       (into {}))]
+               (doseq [[doc-id _] docs]
+                 (swap! docs* update-in [doc-id] #(transform specter-path rel-docs-by-id %))))
+             [:join false]
+             (let [arity-single? (not= (last rel-path) [])
+                   rel-ids (map first docs)
+                   rel-field (:field rel-spec)
+                   rel-docs-by-field (->> (:_documents
+                                            (read-resource deps rel-resource request
+                                                           (update-in rel-query [:find]
+                                                                      #(merge % {rel-field {"$in" rel-ids}}))))
+                                          (group-by rel-field))]
+               (doseq [[doc-id _] docs]
+                 (swap! docs* update-in [doc-id]
+                        #(transform (drop-last specter-path) (constantly
+                                                               (if (vector? (first (keys rel-docs-by-field))) ;; rel-field is an array
+                                                                 (->> rel-docs-by-field
+                                                                      (filter (fn [[k _]]
+                                                                                (first (filter (fn [el] (= el doc-id)) k))))
+                                                                      first
+                                                                      second)
+                                                                 (-> (rel-docs-by-field doc-id)
+                                                                     (?> arity-single? first)))) %))))
+             [:join true]
+             ;; no optimization possible, we do parallely, and given the threadpool, the fetching for each document
+             (let [rel-ids (map first docs)
+                   rel-field (:field rel-spec)
+                   rel-docs-by-field (->> (cp/pmap pool
+                                                   (fn [id]
+                                                     [id (:_documents
+                                                           (read-resource deps rel-resource request
+                                                                          (update-in rel-query [:find]
+                                                                                     #(merge % {rel-field id}))))])
+                                                   rel-ids)
+                                          (into {}))]
+               (doseq [[doc-id _] docs]
+                 (swap! docs* update-in [doc-id]
+                        #(transform (drop-last specter-path) (constantly (rel-docs-by-field doc-id)) %))))
+             )
+      (catch ExceptionInfo ex
+        (if (#{:unauthorized :forbidden} (:type (ex-data ex)))
+          (log/warn "relation fetching failed as " (:type (ex-data ex)))
+          (throw ex))))))
 
 (defn read-resource [{:keys [store hooks] :as deps} resource request query]
   (let [[pre-read-fn post-read-fn] ((juxt :pre-read :post-read) (compose-hooks hooks resource))
