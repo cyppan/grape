@@ -4,7 +4,7 @@
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [cheshire "5.6.2"]
+                 [cheshire "5.6.3"]
                  [clj-time "0.12.0"]
                  [prismatic/schema "1.1.2"]
                  [prismatic/plumbing "0.5.3"]
@@ -17,8 +17,8 @@
                  [slingshot "0.12.2"]
                  [org.clojure/tools.logging "0.3.1"]
                  [com.stuartsierra/component "0.3.1"]
-                 [http-kit "2.1.19"]
-                 [com.auth0/java-jwt "2.1.0"]
+                 [http-kit "2.2.0"]
+                 [com.auth0/java-jwt "2.2.0"]
                  [com.rpl/specter "0.12.0-SNAPSHOT"]
                  [com.climate/claypoole "1.1.2"]]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
