@@ -6,7 +6,7 @@
             [clojure.tools.logging :as log]
             [grape.schema :as gs])
   (:use org.httpkit.server)
-  (:import (com.auth0.jwt JWTVerifier)))
+  (:import (com.auth0.jwt JWTVerifier JWTVerifyException JWTAudienceException JWTExpiredException JWTIssuerException)))
 
 ;; Types definitions
 
@@ -37,15 +37,23 @@
                  (#(gs/validate % auth-schema))
                  (assoc request :auth)
                  handler))
-          (catch Exception ex
+          (catch JWTVerifyException _
+            (log/warn "jwt verify failed")
+            (handler request))
+          (catch JWTAudienceException _
+            (log/warn "jwt audience invalid")
+            (handler request))
+          (catch JWTExpiredException _
+            (log/warn "jwt expired")
+            (handler request))
+          (catch JWTIssuerException _
+            (log/warn "jwt issuer invalid")
             (handler request)))
         (handler request)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; # HTTPServer component
 ;;;;;;;;;;;;;;;;;;;;;;;
-
-
 
 ;; Middleware which merges the dependencies map into the request object.
 (s/defn wrap-dependencies :- RingHandler
