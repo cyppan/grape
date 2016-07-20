@@ -57,7 +57,8 @@
   (count [_ source {:keys [find]} {:keys [soft-delete?] :as opts}]
     (let [find (if soft-delete?
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
-                 find)]
+                 find)
+          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
       (mc/count db source find)))
   (insert [_ source document]
     (mc/insert-and-return db source document))
