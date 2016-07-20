@@ -20,7 +20,7 @@
                  [http-kit "2.2.0"]
                  [com.auth0/java-jwt "2.2.0"]
                  [com.rpl/specter "0.12.0-SNAPSHOT"]
-                 [com.climate/claypoole "1.1.2"]]
+                 [com.climate/claypoole "1.1.3"]]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl {:main dev}
              :dev  {:dependencies [[org.clojure/tools.namespace "0.2.11"]]
