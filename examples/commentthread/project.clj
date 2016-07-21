@@ -6,6 +6,8 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [grape "0.1.0-SNAPSHOT"]
                  [com.novemberain/monger "3.0.2"]
+                 [com.taoensso/timbre "4.7.0"]
+                 [com.fzakaria/slf4j-timbre "0.3.2"]
                  [ring/ring-core "1.4.0"]
                  [ring/ring-jetty-adapter "1.4.0"]
                  [jumblerg/ring.middleware.cors "1.0.1"]

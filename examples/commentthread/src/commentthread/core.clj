@@ -1,16 +1,19 @@
 (ns commentthread.core
-  (:require [monger.core :as mg]
-            [grape.hooks.core :refer [hooks]]
-            [grape.schema :refer :all]
-            [grape.rest.route :refer [handler-builder]]
-            [grape.store :refer [map->MongoDataSource]]
-            [grape.http :refer [wrap-jwt-auth]]
-            [ring.adapter.jetty :refer [run-jetty]]
-            [ring.middleware.params :refer [wrap-params]]
-            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
-            [ring.middleware.cors :refer [wrap-cors]]
-            [monger.collection :as mc])
-  (:gen-class))
+    (:require [monger.core :as mg]
+      [grape.hooks.core :refer [hooks]]
+      [grape.schema :refer :all]
+      [grape.rest.route :refer [handler-builder]]
+      [grape.store :refer [map->MongoDataSource]]
+      [grape.http :refer [wrap-jwt-auth]]
+      [ring.adapter.jetty :refer [run-jetty]]
+      [ring.middleware.params :refer [wrap-params]]
+      [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
+      [ring.middleware.cors :refer [wrap-cors]]
+      [monger.collection :as mc]
+      [taoensso.timbre :as timbre])
+    (:gen-class))
+
+(timbre/merge-config! {:level :info})
 
 (def db (mg/get-db (mg/connect) "commentthread"))
 

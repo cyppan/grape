@@ -10,13 +10,19 @@
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [ring.middleware.cors :refer [wrap-cors]]
             [bidi.ring :refer [make-handler]]
-            [grape.store :as store])
+            [grape.store :as store]
+            [grape.schema :refer :all]
+            [taoensso.timbre :as timbre])
   (:gen-class))
+
+(timbre/merge-config! {:level :info})
 
 (def config
   {:mongo-db    {:uri "mongodb://localhost:27017/commentthread"}
    :jwt         {:audience "api"
-                 :secret   "secret"}
+                 :secret   "secret"
+                 :auth-schema {:user ObjectId
+                               Any   Any}}
    :http-server {:host "0.0.0.0" :port 8081}})
 
 (defn health-handler [_]

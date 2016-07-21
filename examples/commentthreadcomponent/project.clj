@@ -5,6 +5,8 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [grape "0.1.0-SNAPSHOT"]
+                 [com.taoensso/timbre "4.7.0"]
+                 [com.fzakaria/slf4j-timbre "0.3.2"]
                  [com.novemberain/monger "3.0.2"]
                  [ring/ring-core "1.4.0"]
                  [ring/ring-jetty-adapter "1.4.0"]
