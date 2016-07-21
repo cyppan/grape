@@ -90,7 +90,7 @@
                    :request-method :post}
           resp (handler request)]
       (is (= 422 (:status resp)))
-      (is (= {:user "the resource should exist"} (:body resp)))))
+      (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
 
   (testing "create success"
     (load-fixtures)
