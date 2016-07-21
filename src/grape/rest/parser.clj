@@ -1,6 +1,7 @@
 (ns grape.rest.parser
   (:require [cheshire.core :refer :all]
-            [plumbing.core :refer :all]))
+            [plumbing.core :refer :all])
+  (:import (com.fasterxml.jackson.core JsonParseException)))
 
 ;; Ensure compatibility with the Eve python framework query format
 ;; http://python-eve.org
@@ -35,10 +36,13 @@
      :relations relations}))
 
 (defn parse-query [request]
-  (let [query (if-let [query (get-in request [:query-params "query"])]
+  (try
+    (let [query (if-let [query (get-in request [:query-params "query"])]
                 (parse-string query true)
                 (parse-eve-params request))]
-    (update-in query [:find] #(merge % (:route-params request {})))))
+    (update-in query [:find] #(merge % (:route-params request {}))))
+    (catch JsonParseException ex
+      (throw (ex-info (str "query parsing failed: " (.getMessage ex)) {:type :validation-failed})))))
 
 (defn format-eve-response [response]
   (let [body (:body response)
