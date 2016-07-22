@@ -73,7 +73,7 @@
         (and item-method? (= method :delete))
         (let [find (:route-params request)]
           (->> (delete-resource deps resource request find)
-               (assoc {:status 200} :body)
+               (assoc {:status 204} :body)
                format-eve-response))
         :else {:status 404 :body {:_error (str method " method is unsupported for the resource " resource-name)}})
       (catch [:type :unauthorized] _

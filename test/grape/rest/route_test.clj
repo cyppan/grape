@@ -5,7 +5,9 @@
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
             [grape.fixtures :refer :all]
-            [slingshot.slingshot :refer [throw+ try+]])
+            [slingshot.slingshot :refer [throw+ try+]]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)))
 
@@ -164,8 +166,8 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/comments")
           handler (:handler match)
-          request {:body           {:text    "coucou !"
-                                    :user    "aaaaaaaaaaaaaaaaaaaaaaa2"}
+          request {:body           {:text "coucou !"
+                                    :user "aaaaaaaaaaaaaaaaaaaaaaa2"}
                    :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)]
@@ -176,8 +178,202 @@
     (let [routes ["/" (build-resources-routes deps)]
           match (match-route routes "/comments")
           handler (:handler match)
-          request {:body           {:text    "coucou !"}
+          request {:body           {:text "coucou !"}
                    :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
                    :request-method :post}
           resp (handler request)]
       (is (instance? DateTime (get-in resp [:body :_created]))))))
+
+(deftest update-resource
+  (testing "update - validation fails - not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
+                   :request-method :put
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status} (handler request)]
+      (is (= 404 status))))
+
+  (testing "update - validation fails - required fields"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :put
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status {error :_error {:keys [username email password]} :_issues} :body} (handler request)]
+      (is (= 422 status))
+      (is (= error "validation failed"))
+      (is (= username "the field is required"))
+      (is (= email "the field is required"))
+      (is (= password "the field is required"))))
+
+  (testing "update comment - validation fails - user not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments/ccccccccccccccccccccccc1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :body           {:user (ObjectId. "ffffffffffffffffffffffff")
+                                    :text "toto"}
+                   :request-method :put
+                   :route-params   (:route-params match)}
+          resp (handler request)]
+      (is (= 422 (:status resp)))
+      (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
+
+  (testing "update comment - validation fails - user should be self"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments/ccccccccccccccccccccccc1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :body           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")
+                                    :text "toto"}
+                   :request-method :put
+                   :route-params   (:route-params match)}
+          resp (handler request)]
+      (is (= 403 (:status resp)))))
+
+  (testing "update success"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          handler (:handler match)
+          request {:body           {:username "newone"
+                                    :email    "coucou@coucou.com"
+                                    :password "secret"}
+                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :put
+                   :route-params   (:route-params match)}
+          {status :status {:keys [username email]} :body} (handler request)]
+      (is (= status 200))
+      (is (= username "newone"))
+      (is (= email "coucou@coucou.com"))))
+
+  (testing "update a user should change the _updated date"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          now-before-update (t/now)
+          handler (:handler match)
+          request {:body           {:username "newone"
+                                    :email    "coucou@coucou.com"
+                                    :password "secret"}
+                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :put
+                   :route-params (:route-params match)}
+          resp (handler request)]
+      (is (instance? DateTime (get-in resp [:body :_updated])))
+      (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))
+  )
+
+(deftest partial-update-resource
+  (testing "partial update - validation fails - not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
+                   :request-method :patch
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status} (handler request)]
+      (is (= 404 status))))
+
+  (testing "partial update comment - validation fails - user not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments/ccccccccccccccccccccccc1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :body           {:user (ObjectId. "ffffffffffffffffffffffff")}
+                   :request-method :patch
+                   :route-params   (:route-params match)}
+          resp (handler request)]
+      (is (= 422 (:status resp)))
+      (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
+
+  (testing "partial update comment - validation fails - user should be self"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/comments/ccccccccccccccccccccccc1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :body           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
+                   :request-method :patch
+                   :route-params   (:route-params match)}
+          resp (handler request)]
+      (is (= 403 (:status resp)))))
+
+  (testing "partial update success"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          handler (:handler match)
+          request {:body           {:username "newone"}
+                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :patch
+                   :route-params   (:route-params match)}
+          {status :status {:keys [username email]} :body} (handler request)]
+      (is (= status 200))
+      (is (= username "newone"))))
+
+  (testing "partial update a user should change the _updated date"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          now-before-update (t/now)
+          handler (:handler match)
+          request {:body           {:username "newone"}
+                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :patch
+                   :route-params (:route-params match)}
+          resp (handler request)]
+      (is (instance? DateTime (get-in resp [:body :_updated])))
+      (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))
+  )
+
+(deftest delete-resource
+  (testing "delete - not found"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
+                   :request-method :delete
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status} (handler request)]
+      (is (= 404 status))))
+
+  (testing "delete - unauthorized"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
+                   :request-method :delete
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status :as resp} (handler request)]
+      (clojure.pprint/pprint resp)
+      (is (= 403 status))))
+
+  (testing "delete - success"
+    (load-fixtures)
+    (let [routes ["/" (build-resources-routes deps)]
+          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
+          handler (:handler match)
+          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
+                   :request-method :delete
+                   :body           {}
+                   :route-params   (:route-params match)}
+          {status :status} (handler request)]
+      (is (= 204 status))))
+  )
