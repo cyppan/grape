@@ -362,7 +362,6 @@
                    :body           {}
                    :route-params   (:route-params match)}
           {status :status :as resp} (handler request)]
-      (clojure.pprint/pprint resp)
       (is (= 403 status))))
 
   (testing "delete - success"

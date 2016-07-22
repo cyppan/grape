@@ -38,9 +38,9 @@
 (defn parse-query [request]
   (try
     (let [query (if-let [query (get-in request [:query-params "query"])]
-                (parse-string query true)
-                (parse-eve-params request))]
-    (update-in query [:find] #(merge % (:route-params request {}))))
+                  (parse-string query true)
+                  (parse-eve-params request))]
+      (update-in query [:find] #(merge % (:route-params request {}))))
     (catch JsonParseException ex
       (throw (ex-info (str "query parsing failed: " (.getMessage ex)) {:type :validation-failed})))))
 

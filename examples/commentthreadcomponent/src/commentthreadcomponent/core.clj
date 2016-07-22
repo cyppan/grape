@@ -31,7 +31,7 @@
 
 (defn not-found-handler [_]
   {:status 404
-   :body   {:_status 404 :_message "OK"}})
+   :body   {:_status 404 :_message "Not Found"}})
 
 (defn app-routes [deps]
   (make-handler ["/" (concat

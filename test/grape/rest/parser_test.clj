@@ -5,7 +5,8 @@
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
             [grape.fixtures :refer :all]
-            [slingshot.slingshot :refer [throw+ try+]]))
+            [slingshot.slingshot :refer [throw+ try+]])
+  (:import (clojure.lang ExceptionInfo)))
 
 (deftest query-parser
   (testing "Eve query DSL compatibility"
@@ -35,4 +36,8 @@
                  :sort      {:_created -1}
                  :relations {:myrelation {}}}
           request {:query-params {"query" (generate-string query)}}]
-      (is (= (parse-query request) query)))))
+      (is (= (parse-query request) query))))
+
+  (testing "Grape malformed query"
+    (let [request {:query-params {"query" "{{}"}}]
+      (is (thrown-with-msg? ExceptionInfo #"query parsing failed" (parse-query request))))))

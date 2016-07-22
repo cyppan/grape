@@ -105,9 +105,14 @@
                                    {:$inc {:statistics.likes 1}})
                         payload)})
 
-(def config {:default-paginate {:per-page 10}
+(def config {:http-server      {:host "localhost" :port 8080}
+             :default-paginate {:per-page 10}
              :default-sort     {:sort {:_created -1}}
-             :auth-schema      {:user ObjectId}})
+             :jwt              {:audience    "api"
+                                :secret      "secret"
+                                :auth-schema {:user ObjectId
+                                              s/Any s/Any}}
+             :mongo-db         {:uri "mongodb://localhost:27017/test"}})
 
 (def deps {:store              store-inst
            :resources-registry {:users        UsersResource

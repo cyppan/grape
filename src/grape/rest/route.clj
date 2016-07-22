@@ -8,8 +8,7 @@
             [bidi.ring :refer (make-handler)]
             [clojure.tools.logging :as log]
             [slingshot.slingshot :refer [try+]])
-  (:import (clojure.lang ExceptionInfo)
-           (com.fasterxml.jackson.core JsonGenerationException)))
+  (:import (com.fasterxml.jackson.core JsonGenerationException)))
 
 (defn rest-resource-handler [deps resource request]
   (let [method (:request-method request)
