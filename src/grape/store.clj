@@ -64,11 +64,11 @@
     (mc/insert-and-return db source document))
   (partial-update [self source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
-      (mc/update db source {:_id coerced} {"$set" document})
+      (mc/update db source {:_id coerced} {"$set" (dissoc document :_id)})
       document))
   (update [self source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
-      (mc/update db source {:_id coerced} document)
+      (mc/update db source {:_id coerced} (dissoc document :_id))
       document))
   (delete [self source id {:keys [soft-delete?] :as opts}]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
