@@ -97,7 +97,9 @@
         count (when count?
                 (future
                   (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})))
-        docs* (atom (->> (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
+        items (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
+        ordered-ids (map :_id items)
+        docs* (atom (->> items
                          (map #(vector (:_id %) %))
                          (into {})))]
     (when (and (clojure.core/count @docs*) (seq relations))
@@ -106,7 +108,8 @@
                  (read-relation deps resource request docs* rel-key rel-query)))
     (->> {:_count     (when count @count)
           :_query     query
-          :_documents (into [] (map second @docs*))}
+          :_documents (let [docs @docs*]
+                        (into [] (map #(get docs %) ordered-ids)))}
          (post-read-fn deps resource request))))
 
 (defn read-item [deps resource request query]
