@@ -2,8 +2,7 @@
   (:require [clojure.test :refer :all]
             [grape.core :refer :all]
             [grape.query :refer [validate-query]]
-            [grape.fixtures]
-            [grape.fixtures :refer :all])
+            [grape.fixtures.comments :refer :all])
   (:import (clojure.lang ExceptionInfo)
            (org.bson.types ObjectId)))
 
@@ -117,4 +116,5 @@
                                  {:find {:_id "ccccccccccccccccccccccc1"} :relations {(keyword "likes.[]") {}}})]
       (is (= {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")
               :comment (ObjectId. "ccccccccccccccccccccccc1")}
-             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user])))))))
+             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user]))))))
+  )

@@ -1,10 +1,10 @@
 (ns grape.http-test
   (:require [clojure.test :refer :all]
             [grape.http :refer :all]
-            [grape.schema :refer [ObjectId Any]]
+            [grape.schema :refer :all]
             [bidi.ring :refer [make-handler]]
             [schema.core :as s]
-            [grape.fixtures :refer :all]
+            [grape.fixtures.comments :refer :all]
             [grape.rest.route :refer [handler-builder]]
             [grape.store :refer [map->MongoDataSource]]
             [ring.middleware.params :refer [wrap-params]]
@@ -14,7 +14,8 @@
             [com.stuartsierra.component :as component]
             [grape.rest.route :refer [build-resources-routes]]
             [grape.store :as store])
-  (:import (clojure.lang ExceptionInfo)))
+  (:import (clojure.lang ExceptionInfo)
+           (org.bson.types ObjectId)))
 
 ;; token generated with jwt.io
 ;; {"aud": "api", "user-id": "57503897eeb06b64ada8fa08"}
@@ -29,7 +30,7 @@
           ;; we setup a simple handler that responds with the incoming request
           handler (wrap-jwt-auth identity {:audience "api" :secret "secret" :auth-schema {:user-id ObjectId s/Any s/Any}})
           response (handler request)]
-      (is (= (org.bson.types.ObjectId. "57503897eeb06b64ada8fa08") (get-in response [:auth :user-id]))))
+      (is (= (ObjectId. "57503897eeb06b64ada8fa08") (get-in response [:auth :user-id]))))
     )
 
   (testing "request jwt signature invalid"

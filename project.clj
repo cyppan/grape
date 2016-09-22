@@ -28,7 +28,8 @@
                  [ring/ring-core "1.5.0"]
                  [jumblerg/ring.middleware.cors "1.0.1"]
                  [ring/ring-json "0.4.0"]
-                 [clj-http "2.2.0"]]
+                 [clj-http "2.2.0"]
+                 [com.graphql-java/graphql-java "2.1.0"]]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl      {:main dev}
              :dev       {:dependencies [[org.clojure/tools.namespace "0.2.11"]]

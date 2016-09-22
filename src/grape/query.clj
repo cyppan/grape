@@ -32,6 +32,7 @@
 (defn validate-query-find [resource where]
   (let [in-schema-keys?
         (->> (get-schema-keyseqs (:schema resource))
+             (into [])
              flatten
              (map name)
              set)
@@ -67,26 +68,27 @@
   ;; Now we walk the query spec, validates the where parameters and the query with hooks
   (validate-query-find resource (:find query))
   (let [{:keys [relations]} query]
-    (merge (dissoc query :relations)
-           {:relations (apply merge (for [[relation-key relation-q] relations
-                                          :let [relation-path (map (fn [part]
-                                                                     (if (= part "[]")
-                                                                       []
-                                                                       (keyword part))) (clojure.string/split (name relation-key) #"\."))
-                                                [relation-path relation-spec] (->> (get-schema-relations (:schema resource))
-                                                                                   (filter (fn [[path spec]]
-                                                                                             (or (= relation-path path)
-                                                                                                 (= relation-path (:path spec)))))
-                                                                                   first)
-                                                relation-key (keyword (clojure.string/join "." (map #(if (vector? %) "[]" (name %)) relation-path)))
-                                                relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
-                                                embedded? (when relation-spec (= :embedded (:type relation-spec)))
-                                                relation-q (if embedded?
-                                                             (deep-merge relation-q {:opts {:count?    false
-                                                                                            :paginate? false
-                                                                                            :sort?     false}})
-                                                             (deep-merge relation-q {:opts {:count? false}}))]
-                                          :when (and relation-spec relation-res)]
-                                      {relation-key (if recur?
-                                                      (validate-query deps relation-res request relation-q {:recur? true})
-                                                      relation-q)}))})))
+    (assoc query
+      :relations (apply merge (for [[relation-key relation-q] relations
+                                    :let [relation-path (map (fn [part]
+                                                               (if (= part "[]")
+                                                                 ALL
+                                                                 (keyword part))) (clojure.string/split (name relation-key) #"\."))
+                                          [relation-path relation-spec] (->> (get-schema-relations (:schema resource))
+                                                                             (filter (fn [[path _]]
+                                                                                       (or (= (seq relation-path) (seq path))
+                                                                                           (= (filter (partial not= ALL) relation-path)
+                                                                                              (filter (partial not= ALL) path)))))
+                                                                             first)
+                                          relation-key (keyword (clojure.string/join "." (map #(if (= ALL %) "[]" (name %)) relation-path)))
+                                          relation-res (when relation-spec (get resources-registry (:resource relation-spec)))
+                                          embedded? (when relation-spec (= :embedded (:type relation-spec)))
+                                          relation-q (if embedded?
+                                                       (deep-merge relation-q {:opts {:count?    false
+                                                                                      :paginate? false
+                                                                                      :sort?     false}})
+                                                       (deep-merge relation-q {:opts {:count? false}}))]
+                                    :when (and relation-spec relation-res)]
+                                {relation-key (if recur?
+                                                (validate-query deps relation-res request relation-q {:recur? true})
+                                                relation-q)})))))

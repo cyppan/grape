@@ -4,7 +4,7 @@
             [grape.rest.route :refer :all]
             [cheshire.core :refer :all]
             [bidi.bidi :refer :all]
-            [grape.fixtures :refer :all]
+            [grape.fixtures.comments :refer :all]
             [slingshot.slingshot :refer [throw+ try+]])
   (:import (clojure.lang ExceptionInfo)))
 
