@@ -7,6 +7,17 @@
            (schema.spec.collection CollectionSpec)
            (schema.core Maybe)))
 
+(defn ->PascalCase [input]
+  (let [formatter (cond
+                    (keyword? input) keyword
+                    (symbol? input) symbol
+                    :else identity)
+        input (name input)]
+    (->> (clojure.string/split input #"(-+|_+| +)")
+         (map clojure.string/capitalize)
+         (apply str)
+         formatter)))
+
 (defn deep-merge
   "Recursively merges maps. If keys are not maps, the last value wins."
   [& vals]

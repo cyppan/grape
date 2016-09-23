@@ -5,9 +5,12 @@
             [grape.schema :refer :all]
             [monger.core :as mg]
             [monger.collection :as mc]
-            [grape.core :refer [read-item partial-update-resource]])
+            [grape.core :refer [read-item partial-update-resource]]
+            [grape.graphql.core :refer [build-schema]])
   (:import (org.bson.types ObjectId)
-           (org.joda.time DateTime)))
+           (org.joda.time DateTime)
+           (graphql GraphQL)
+           (graphql.execution.batched BatchedExecutionStrategy)))
 
 (def db (mg/get-db (mg/connect) "test"))
 
@@ -34,7 +37,7 @@
                                                      email?)
                         :password     (hidden s/Str)
                         (? :comments) (read-only [(resource-join :comments :user)])
-                        (? :friends)  [(resource-embedded :users ObjectId)]
+                        (? :friends)  [(resource-embedded :users :friends ObjectId)]
                         (? :_created) (read-only DateTime)
                         (? :_updated) (read-only DateTime)}
    :url                "users"
@@ -60,10 +63,10 @@
   {:datasource         {:source "comments"}
    :grape.graphql/type 'Comment
    :schema             {(? :_id)          ObjectId
-                        :user             (resource-embedded :public-users ObjectId)
+                        :user             (resource-embedded :public-users :user ObjectId)
                         :text             s/Str
-                        (? :parent)       (s/maybe (resource-embedded :comments ObjectId))
-                        (? :last_replies) (read-only [(resource-embedded :comments ObjectId)])
+                        (? :parent)       (s/maybe (resource-embedded :comments :parent ObjectId))
+                        (? :last_replies) (read-only [(resource-embedded :comments :last_replies ObjectId)])
                         (? :likes)        (read-only [(resource-join :likes :comment)])
                         (? :statistics)   (read-only {:likes s/Int})
                         (? :_created)     (read-only DateTime)
@@ -91,8 +94,8 @@
   {:datasource         {:source "likes"}
    :grape.graphql/type 'Like
    :schema             {(? :_id) ObjectId
-                        :user    (resource-embedded :public-users ObjectId)
-                        :comment (resource-embedded :comments ObjectId)}
+                        :user    (resource-embedded :public-users :user ObjectId)
+                        :comment (resource-embedded :comments :comment ObjectId)}
    :url                "likes"
    :operations         #{:create :read :delete}
    :public-operations  #{:read}
@@ -115,11 +118,15 @@
                                               s/Any s/Any}}
              :mongo-db         {:uri "mongodb://localhost:27017/test"}})
 
+(def resources-registry
+  {:users        UsersResource
+   :public-users PublicUsersResource
+   :comments     CommentsResource
+   :likes        LikesResource})
+
 (def deps {:store              store-inst
-           :resources-registry {:users        UsersResource
-                                :public-users PublicUsersResource
-                                :comments     CommentsResource
-                                :likes        LikesResource}
+           :resources-registry resources-registry
+           :graphql            (GraphQL. (build-schema {:resources-registry resources-registry}) (BatchedExecutionStrategy.))
            :hooks              hooks
            :config             config})
 
@@ -128,3 +135,27 @@
     (mc/drop db coll)
     (doseq [doc docs]
       (mc/insert db coll doc))))
+
+(def CommentsListQuery
+  "query CommentsListQuery {
+    CommentsList(first: 10) {
+      edges {
+        cursor
+        node {
+          id
+          text
+        }
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+  }")
+
+(def CommentsQuery
+  "query CommentsQuery {
+    Comments(id:\"ccccccccccccccccccccccc1\") {
+      id
+      text
+    }
+  }")

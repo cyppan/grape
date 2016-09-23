@@ -5,15 +5,15 @@
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [clj-time.format :as f]
-            [grape.schema :refer :all])
+            [grape.schema :refer :all]
+            [grape.core :refer [read-resource read-item]]
+            [grape.utils :refer [->PascalCase]])
   (:import (graphql.schema GraphQLObjectType GraphQLSchema)
            (graphql.schema GraphQLFieldDefinition GraphQLObjectType GraphQLArgument GraphQLInterfaceType TypeResolver DataFetcher GraphQLEnumType GraphQLEnumValueDefinition GraphQLNonNull GraphQLList GraphQLTypeReference DataFetchingEnvironment GraphQLInputObjectType GraphQLInputObjectField GraphQLUnionType GraphQLScalarType Coercing)
            (graphql Scalars GraphQL)
            (java.util Map List)
            (graphql.execution.batched BatchedExecutionStrategy BatchedDataFetcher)
            (graphql.relay Relay)
-           (clojure.lang IRecord)
-           (schema.core Schema Maybe)
            (org.bson.types ObjectId)
            (graphql.language StringValue IntValue)
            (org.joda.time DateTime)))
@@ -154,10 +154,10 @@
 ;;; Schema utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn execute [^GraphQLSchema schema ^Object context ^String q & [^Map params]]
-  (let [result (cond-> (GraphQL. schema (BatchedExecutionStrategy.))
-                       params (.execute q nil context params)
-                       (not params) (.execute q context))]
+(defn execute [{:keys [graphql] :as deps} request ^String q & [^Map params]]
+  (let [result (cond-> graphql
+                       params (.execute q nil [deps request] params)
+                       (not params) (.execute q [deps request]))]
     (if-let [data (.getData result)]
       (to-clj data)
       (do (prn "ERROR")
@@ -202,24 +202,151 @@
    s/Bool   Scalars/GraphQLBoolean
    s/Str    Scalars/GraphQLString})
 
-(defn prismatic->graphql-schema [type-name schema
-                                 & {:keys [skip-hidden? skip-read-only?]
-                                    :or {skip-hidden? false skip-read-only? false}}]
-  (walk-schema
-    schema
-    (comp name #(if (= % :_id) :id %) schema.core/explicit-schema-key)
-    (fn [path v]
-      (types-map
-        (if (maybe? v) (:schema v) v)))
-    :transform-map (fn [path m]
-                     (object (name (gensym type-name))
-                             (map (fn [[k v]] (field k v)) m)))
-    :transform-seq (fn [path v]
-                     (prn path v)
-                     (if (seq (filter identity v))
-                       (GraphQLList. (first v))
-                       v))
-    :skip-hidden? skip-hidden?
-    :skip-read-only? skip-read-only?
-    :skip-unwrap-for (fn [path v]
-                       (and (maybe? v) (primitive? (:schema v))))))
+;(deftype EmbeddedTypeReference [resource-key]
+;  GraphQLTypeReference)
+
+(defn type-ref [{:keys [resources-registry] :as deps} resource v]
+  (cond
+    (resource-embedded? v)
+    (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
+                                     :grape.graphql/type
+                                     name)
+                                 :embedded (:resource-key v) nil)
+    (resource-join? v)
+    (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
+                                     :grape.graphql/type
+                                     name)
+                                 :join (:resource-key v) (:field v))))
+
+(defn mongo->graphql [type]
+  (fn [obj]
+    (->> obj
+         (map (fn [[k v]]
+                (cond
+                  (instance? ObjectId v) [k (str v)]
+                  (and (sequential? v) (instance? ObjectId (first v))) [k (map str v)]
+                  :else [k v])))
+         (map (fn [[k v]]
+                (if (= :_id k)
+                  [:id v]
+                  [k v])))
+         (into {})
+         (#(assoc % :_type type))
+         clojure.walk/stringify-keys)))
+
+(defn store-connection-data-fetcher [grape-type-ref & {:keys [many?]}]
+  (let [[name type resource-key field] (.state ^grape.graphql.GrapeTypeRef grape-type-ref)]
+    (connection-data-fetcher
+      (fn [skip limit ^DataFetchingEnvironment env]
+        (let [[{:keys [resources-registry store] :as deps} request] (.getContext env)
+              source (.getSource env)
+              resource (get resources-registry resource-key)
+              type (:grape.graphql/type resource)
+              query (cond
+                      (= type :join)
+                      {:find {field (-> (get source "id") (#(.getCoercing %)) (#(.serialize %))) :_deleted {:$ne true}}}
+                      (and (not many?) (= type :embedded))
+                      {:find {field (-> (get source (keyword field)) (#(.getCoercing %)) (#(.serialize %)))}}
+                      (and many? (= type :embedded))
+                      {:find {field (-> (get source (keyword field)) (map (#(.getCoercing %))) (map (#(.serialize %))))}})]
+          (if many?
+            (update (read-resource deps resource request query)
+                    :_documents
+                    (partial map (mongo->graphql type)))
+            (-> (read-item deps resource request query)
+                ((mongo->graphql type)))))))))
+
+(defn resource->output-graphql-type [{:keys [resources-registry] :as deps} resource
+                                     & {:keys [skip-hidden? skip-read-only?]
+                                        :or   {skip-hidden? false skip-read-only? false}}]
+  (let [resource (if (keyword? resource) (get resources-registry resource) resource)
+        schema (:schema resource)
+        type (-> resource :grape.graphql/type name)]
+    (walk-schema
+      schema
+      (comp name #(if (= % :_id) :id %) schema.core/explicit-schema-key)
+      (fn [path v]
+        (cond
+          (resource-embedded? v) (if (maybe? v)
+                                   (type-ref deps resource (:schema v))
+                                   (GraphQLNonNull. (type-ref deps resource v)))
+          (resource-join? v) (type-ref deps resource v)
+          (types-map v) (if (maybe? v)
+                          (types-map (:schema v))
+                          (GraphQLNonNull. (types-map v)))))
+      :transform-map (fn [path m]
+                       (object (if (= path []) type (name (gensym type)))
+                               (->> m
+                                    (filter (comp identity second))
+                                    (map (fn [[k v]]
+                                           (field k v))))))
+      :transform-seq (fn [path v]
+                       (when (seq (filter identity v))
+                         (GraphQLList. (first v))))
+      :skip-hidden? true
+      :skip-read-only? false
+      :skip-unwrap-for (fn [path v]
+                         (or (and (maybe? v) (primitive? (:schema v)))
+                             (resource-embedded? v)
+                             (resource-join? v))))))
+
+(defn resource->input-graphql-type [{:keys [resources-registry] :as deps} resource
+                                    & {:keys [skip-hidden? skip-read-only?]
+                                       :or   {skip-hidden? false skip-read-only? false}}]
+  (let [resource (if (keyword? resource) (get resources-registry resource) resource)
+        schema (:schema resource)
+        type (-> resource :grape.graphql/type name)]
+    (walk-schema
+      schema
+      (comp name #(if (= % :_id) :id %) schema.core/explicit-schema-key)
+      (fn [path v]
+        (cond
+          (types-map v) (if (maybe? v)
+                          (types-map (:schema v))
+                          (GraphQLNonNull. (types-map v)))))
+      :transform-map (fn [path m]
+                       (input-object (if (= path []) type (name (gensym type)))
+                                     (map (fn [[k v]] (input-field k v)) (filter (comp identity second) m))))
+      :transform-seq (fn [path v]
+                       (when (seq (filter identity v))
+                         (GraphQLList. (first v))))
+      :skip-hidden? false
+      :skip-read-only? true
+      :skip-unwrap-for (fn [path v]
+                         (or (and (maybe? v) (primitive? (:schema v))))))))
+
+(defn build-schema [{:keys [resources-registry] :as deps}]
+  (let [types-map (->> (for [[resource-key resource] resources-registry]
+                         [(name (->PascalCase resource-key)) (resource->output-graphql-type deps resource)])
+                       (into {}))
+        type-resolver (type-resolver (comp
+                                       types-map
+                                       #(get % "_type")))]
+    (schema
+      (object "QueryType"
+              (->> (for [[resource-key resource] resources-registry
+                         :let [type-name (name (->PascalCase resource-key))
+                               type (get types-map type-name)
+                               type-id-schema (.getType (.getFieldDefinition type "id"))]]
+                     [(field (str type-name "List")
+                             (connection (name resource-key) type type-resolver)
+                             :arguments connection-args
+                             :data-fetcher (connection-data-fetcher
+                                             (fn [skip limit ^DataFetchingEnvironment env]
+                                               (let [query {:find {}
+                                                            :paginate {:skip skip :limit limit}
+                                                            :opts {:count? true}}
+                                                     [deps request] (.getContext env)
+                                                     resources (read-resource deps resource request query)]
+                                                 (update resources :_documents
+                                                         (partial map (mongo->graphql type-name)))))))
+                      (field type-name
+                             type
+                             :arguments [(argument "id" type-id-schema)]
+                             :data-fetcher (data-fetcher
+                                             (fn [^DataFetchingEnvironment env]
+                                               (let [query {:find {:_id (.getArgument env "id")}}
+                                                     [deps request] (.getContext env)
+                                                     item (read-item deps resource request query)]
+                                                 ((mongo->graphql type-name) item)))))])
+                   flatten)))))

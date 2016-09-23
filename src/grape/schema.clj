@@ -55,7 +55,7 @@
 ;;; SCHEMA VARIANTS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defrecord ResourceEmbedded [resource-key schema]
+(defrecord ResourceEmbedded [resource-key field schema]
   Schema
   (spec [this]
     (variant/variant-spec
@@ -63,8 +63,8 @@
       [{:schema schema}]))
   (explain [this] (list 'resource-embedded resource-key)))
 
-(defn resource-embedded [resource-key schema]
-  (->ResourceEmbedded resource-key schema))
+(defn resource-embedded [resource-key field schema]
+  (->ResourceEmbedded resource-key field schema))
 
 (defrecord ResourceJoin [resource-key field schema]
   Schema
@@ -131,7 +131,7 @@
        (->> v
             (filter (fn [[k v]]
                       (when-not (or (and skip-hidden? (hidden? v))
-                                    (and skip-read-only? (read-only? v)))
+                                    (and skip-read-only? (or (read-only? v) (resource-join? v))))
                         [k v])))
             (map (fn [[k v]]
                    (let [k (key-fn k)]
