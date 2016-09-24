@@ -100,7 +100,7 @@
           spec-two {:type     :join
                     :resource :other
                     :field    :field}
-          schema {:one (resource-embedded :sample ObjectId)
+          schema {:one (resource-embedded :sample :one ObjectId)
                   (? :two) (read-only [(resource-join :other :field)])}
           relations (get-schema-relations schema)]
       (is (= relations {[:one]    spec-one
@@ -108,7 +108,7 @@
   (testing "array relation"
     (let [spec {:type     :embedded
                 :resource :sample}
-          schema {:seq [{:field (resource-embedded :sample ObjectId)}]}
+          schema {:seq [{:field (resource-embedded :sample :field ObjectId)}]}
           relations (get-schema-relations schema)]
       (is (= relations {[:seq ALL :field] spec}))))
   (testing "join in a root array is not supported"

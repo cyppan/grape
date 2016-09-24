@@ -30,7 +30,7 @@
                  [ring/ring-json "0.4.0"]
                  [clj-http "2.2.0"]
                  [com.graphql-java/graphql-java "2.1.0"]]
-  :main ^:skip-aot grape.core
+  :main grape.core
   :aot [grape.graphql.GrapeTypeRef]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl      {:main dev}
