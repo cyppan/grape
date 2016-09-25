@@ -2,12 +2,14 @@
   (:require [schema.core :as s :refer [explain]]
             [schema.spec.variant :as variant]
             [schema.spec.core :as spec]
+            [cheshire.core :refer [parse-string]]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [clj-time.format :as f]
             [grape.schema :refer :all]
             [grape.core :refer [read-resource read-item]]
-            [grape.utils :refer [->PascalCase]])
+            [grape.utils :refer [->PascalCase]]
+            [clojure.tools.logging :as log])
   (:import (graphql.schema GraphQLObjectType GraphQLSchema)
            (graphql.schema GraphQLFieldDefinition GraphQLObjectType GraphQLArgument GraphQLInterfaceType TypeResolver DataFetcher GraphQLEnumType GraphQLEnumValueDefinition GraphQLNonNull GraphQLList GraphQLTypeReference DataFetchingEnvironment GraphQLInputObjectType GraphQLInputObjectField GraphQLUnionType GraphQLScalarType Coercing)
            (graphql Scalars GraphQL)
@@ -16,7 +18,8 @@
            (graphql.relay Relay)
            (org.bson.types ObjectId)
            (graphql.language StringValue IntValue)
-           (org.joda.time DateTime)))
+           (org.joda.time DateTime)
+           (com.fasterxml.jackson.core JsonParseException)))
 
 (defn enum-value [name value & {:keys [description deprecation-reason]}]
   (GraphQLEnumValueDefinition. name description value deprecation-reason))
@@ -122,7 +125,7 @@
 
 (def relay (Relay.))
 
-(defn connection [name type type-resolver & {:keys [data-fetcher]}]
+(defn connection [name type type-resolver]
   (let [node-interface (.nodeInterface relay type-resolver)
         edge (.edgeType relay name type node-interface [])]
     (.connectionType relay name edge [])))
@@ -139,7 +142,25 @@
                    (if-let [after (.getArgument env "after")]
                      (-> after read-string))
                    0)
-            {:keys [_count _documents]} (f skip limit env)]
+            find (or
+                   (if-let [find (.getArgument env "find")]
+                     (try
+                       (parse-string find)
+                       (catch JsonParseException _ {})))
+                   {})
+            sort (if-let [sort (.getArgument env "sort")]
+                   (->> (clojure.string/split sort #",")
+                        (map (fn [field]
+                               (if (.startsWith field "-")
+                                 [(keyword (clojure.string/replace-first field "-" "")) -1]
+                                 [(keyword field) 1])))
+                        flatten
+                        (apply array-map)))
+            query {:find     find
+                   :sort     sort
+                   :paginate {:skip skip :limit limit}
+                   :opts     {:count? true :paginate? true :sort? true}}
+            {:keys [_count _documents]} (f query env)]
         {"pageInfo" {"hasNextPage" (> _count (count _documents))}
          "edges"    (map-indexed
                       (fn [i doc]
@@ -149,6 +170,9 @@
 
 (def connection-args
   (.getConnectionFieldArguments relay))
+
+(defn node-interface [type-resolver]
+  (.nodeInterface relay type-resolver))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Schema utils
@@ -161,6 +185,8 @@
     (if-let [data (.getData result)]
       (to-clj data)
       (do (prn "ERROR")
+          (doseq [err (.getErrors result)]
+            (log/error err))
           (to-clj (.getErrors result))))))
 
 (def ScalarDateTime
@@ -330,13 +356,12 @@
                                type-id-schema (.getType (.getFieldDefinition type "id"))]]
                      [(field (str type-name "List")
                              (connection (name resource-key) type type-resolver)
-                             :arguments connection-args
+                             :arguments (concat connection-args
+                                                [(argument "sort" Scalars/GraphQLString)
+                                                 (argument "find" Scalars/GraphQLString)])
                              :data-fetcher (connection-data-fetcher
-                                             (fn [skip limit ^DataFetchingEnvironment env]
-                                               (let [query {:find {}
-                                                            :paginate {:skip skip :limit limit}
-                                                            :opts {:count? true}}
-                                                     [deps request] (.getContext env)
+                                             (fn [query ^DataFetchingEnvironment env]
+                                               (let [[deps request] (.getContext env)
                                                      resources (read-resource deps resource request query)]
                                                  (update resources :_documents
                                                          (partial map (mongo->graphql type-name)))))))
@@ -349,4 +374,5 @@
                                                      [deps request] (.getContext env)
                                                      item (read-item deps resource request query)]
                                                  ((mongo->graphql type-name) item)))))])
-                   flatten)))))
+                   flatten)
+              :interfaces [(node-interface type-resolver)]))))

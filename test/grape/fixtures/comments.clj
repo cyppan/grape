@@ -137,8 +137,8 @@
       (mc/insert db coll doc))))
 
 (def CommentsListQuery
-  "query CommentsListQuery {
-    CommentsList(first: 10) {
+  "query CommentsListQuery($first: Int, $sort: String, $find: String) {
+    CommentsList(first: $first, sort: $sort, find: $find) {
       edges {
         cursor
         node {

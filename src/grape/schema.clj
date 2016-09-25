@@ -95,14 +95,6 @@
 
 (def default stc-impl/default)
 
-(def object-id-matcher
-  {ObjectId (coerce/safe #(object-id ^String %))})
-
-(def date-time-matcher
-  (let [date-formatter (get-in *deps* [:config :date-formatter] (f/formatters :date-time))]
-    {DateTime (coerce/safe #(f/parse date-formatter))}))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -189,6 +181,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Validation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def object-id-matcher
+  {ObjectId (coerce/safe #(object-id ^String %))})
+
+(def date-time-matcher
+  (let [date-formatter (get-in *deps* [:config :date-formatter] (f/formatters :date-time))]
+    {DateTime (coerce/safe #(f/parse date-formatter))}))
 
 (defn cleve-coercion-matcher [schema]
   (or (stc/default-coercion-matcher schema)
