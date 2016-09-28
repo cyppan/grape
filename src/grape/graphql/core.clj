@@ -98,11 +98,13 @@
 (defn data-fetcher [f]
   (reify DataFetcher
     (get [this ^DataFetchingEnvironment environment]
+      (prn "calling data-fetcher" environment)
       (f environment))))
 
 (defn batched-data-fetcher [f]
   (reify BatchedDataFetcher
     (get [this ^DataFetchingEnvironment environment]
+      (prn "calling batched-data-fetcher" environment)
       (f environment))))
 
 (defn to-clj [data]
@@ -118,6 +120,22 @@
          (into []))
     :else
     data))
+
+(defn mongo->graphql [type]
+  (fn [obj]
+    (->> obj
+         ;(map (fn [[k v]]
+         ;       (cond
+         ;         (instance? ObjectId v) [k (str v)]
+         ;         (and (sequential? v) (instance? ObjectId (first v))) [k (map str v)]
+         ;         :else [k v])))
+         (map (fn [[k v]]
+                (if (= :_id k)
+                  [:id v]
+                  [k v])))
+         (into {})
+         (#(assoc % :_type type))
+         clojure.walk/stringify-keys)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Relay
@@ -160,13 +178,53 @@
                    :sort     sort
                    :paginate {:skip skip :limit limit}
                    :opts     {:count? true :paginate? true :sort? true}}
-            {:keys [_count _documents]} (f query env)]
+            [deps request] (.getContext env)
+            {:keys [_count _documents]} (f deps request query env)]
         {"pageInfo" {"hasNextPage" (> _count (count _documents))}
          "edges"    (map-indexed
                       (fn [i doc]
                         {"cursor" (str (+ i skip 1))
                          "node"   doc})
                       _documents)}))))
+
+(defn type-ref-data-fetcher [^grape.graphql.GrapeTypeRef grape-type-ref & {:keys [many?]}]
+  (let [[name type resource-key field] (.state grape-type-ref)]
+    (batched-data-fetcher
+      (fn [^DataFetchingEnvironment env]
+        (let [[{:keys [resources-registry] :as deps} request] (.getContext env)
+              source (.getSource env)
+              resource (get resources-registry resource-key)
+              _type (:grape.graphql/type resource)
+              fields (mapv #(.getName %) (.getSelections (.getSelectionSet (first (.getFields env)))))
+              query {:find   (case type
+                               :join
+                               {field {:$in (distinct (map #(get % "id") source))} :_deleted {:$ne true}}
+                               :embedded
+                               {:_id {:$in (->> source
+                                                (map #(get % (clojure.core/name field)))
+                                                flatten
+                                                distinct
+                                                (filter identity))}})
+                     :fields (distinct (conj fields field))}
+              resources-by-field (->> (read-resource deps resource request query)
+                                      :_documents
+                                      (group-by (case type
+                                                  :join field
+                                                  :embedded :_id))
+                                      (map (fn [[k v]] [k (map (mongo->graphql _type) v)]))
+                                      (into {}))]
+          (when (= resource-key :likes)
+            (clojure.pprint/pprint resources-by-field)
+            (prn field (->> source
+                            (map #(get % "id")))))
+          (if many?
+            (->> source
+                 (map #(get % (clojure.core/name field)))
+                 (map (fn [refs]
+                        (map (comp first resources-by-field) refs))))
+            (->> source
+                 (map #(get % (clojure.core/name field)))
+                 (map (comp first resources-by-field)))))))))
 
 (def connection-args
   (.getConnectionFieldArguments relay))
@@ -237,50 +295,14 @@
     (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
                                      :grape.graphql/type
                                      name)
-                                 :embedded (:resource-key v) nil)
+                                 :embedded (:resource-key v) (:field v))
     (resource-join? v)
     (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
                                      :grape.graphql/type
                                      name)
                                  :join (:resource-key v) (:field v))))
 
-(defn mongo->graphql [type]
-  (fn [obj]
-    (->> obj
-         (map (fn [[k v]]
-                (cond
-                  (instance? ObjectId v) [k (str v)]
-                  (and (sequential? v) (instance? ObjectId (first v))) [k (map str v)]
-                  :else [k v])))
-         (map (fn [[k v]]
-                (if (= :_id k)
-                  [:id v]
-                  [k v])))
-         (into {})
-         (#(assoc % :_type type))
-         clojure.walk/stringify-keys)))
-
-(defn store-connection-data-fetcher [grape-type-ref & {:keys [many?]}]
-  (let [[name type resource-key field] (.state ^grape.graphql.GrapeTypeRef grape-type-ref)]
-    (connection-data-fetcher
-      (fn [skip limit ^DataFetchingEnvironment env]
-        (let [[{:keys [resources-registry store] :as deps} request] (.getContext env)
-              source (.getSource env)
-              resource (get resources-registry resource-key)
-              type (:grape.graphql/type resource)
-              query (cond
-                      (= type :join)
-                      {:find {field (-> (get source "id") (#(.getCoercing %)) (#(.serialize %))) :_deleted {:$ne true}}}
-                      (and (not many?) (= type :embedded))
-                      {:find {field (-> (get source (keyword field)) (#(.getCoercing %)) (#(.serialize %)))}}
-                      (and many? (= type :embedded))
-                      {:find {field (-> (get source (keyword field)) (map (#(.getCoercing %))) (map (#(.serialize %))))}})]
-          (if many?
-            (update (read-resource deps resource request query)
-                    :_documents
-                    (partial map (mongo->graphql type)))
-            (-> (read-item deps resource request query)
-                ((mongo->graphql type)))))))))
+(def type-ref? (partial instance? grape.graphql.GrapeTypeRef))
 
 (defn resource->output-graphql-type [{:keys [resources-registry] :as deps} resource
                                      & {:keys [skip-hidden? skip-read-only?]
@@ -305,7 +327,19 @@
                                (->> m
                                     (filter (comp identity second))
                                     (map (fn [[k v]]
-                                           (field k v))))))
+                                           (cond
+                                             (and (instance? GraphQLList v) (instance? GraphQLNonNull (.getWrappedType v)) (type-ref? (.getWrappedType (.getWrappedType v))))
+                                             (field k v
+                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType (.getWrappedType v)) :many? true))
+                                             (and (instance? GraphQLList v) (type-ref? (.getWrappedType v)))
+                                             (field k v
+                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType v) :many? true))
+                                             (or (type-ref? v)
+                                                 (and (instance? GraphQLNonNull v) (type-ref? (.getWrappedType v))))
+                                             (field k v
+                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType v)))
+                                             :else
+                                             (field k v)))))))
       :transform-seq (fn [path v]
                        (when (seq (filter identity v))
                          (GraphQLList. (first v))))
@@ -360,9 +394,8 @@
                                                 [(argument "sort" Scalars/GraphQLString)
                                                  (argument "find" Scalars/GraphQLString)])
                              :data-fetcher (connection-data-fetcher
-                                             (fn [query ^DataFetchingEnvironment env]
-                                               (let [[deps request] (.getContext env)
-                                                     resources (read-resource deps resource request query)]
+                                             (fn [deps request query ^DataFetchingEnvironment env]
+                                               (let [resources (read-resource deps resource request query)]
                                                  (update resources :_documents
                                                          (partial map (mongo->graphql type-name)))))))
                       (field type-name

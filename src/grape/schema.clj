@@ -15,14 +15,8 @@
             [schema-tools.core.impl :as stc-impl]
             [schema.spec.variant :as variant]
             [com.rpl.specter :refer :all])
-  (:import (clojure.lang ExceptionInfo ISeq)
-           (schema.utils ValidationError)
-           (schema.core Predicate Constrained Maybe Both Schema)
-           (java.util UnknownFormatConversionException)
-           (java.util.regex Pattern)
-           (schema.spec.leaf LeafSpec)
-           (schema.spec.collection CollectionSpec)
-           (schema.spec.variant VariantSpec)
+  (:import (schema.utils ValidationError)
+           (schema.core Predicate Constrained Schema)
            (org.bson.types ObjectId)
            (org.joda.time DateTime)))
 
@@ -41,12 +35,17 @@
     (let [resource (resource-key (:resources-registry *deps*))
           deps-store (:store *deps*)
           source (get-in resource [:datasource :source])]
-      (try
-        (> (store/count deps-store source {:find {:_id id}} {}) 0)
-        (catch Exception _ false)))))
+      (pos? (store/count deps-store source {:find {:_id id}} {})))))
+
+(defn unique? [field]
+  (fn [item]
+    (let [deps-store (:store *deps*)
+          source (get-in *resource* [:datasource :source])]
+      (zero? (store/count deps-store source {:find {field item}} {})))))
 
 (def email?
   (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
+
 
 (def url?
   (partial re-matches #"^https?:\/\/(?:(?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}(?:\:[0-9]{2,5})?(?:\/[a-zA-Z0-9\/%@!?$&|\'()*+,#;=.~_-]*)?$"))
@@ -82,6 +81,7 @@
     (leaf/leaf-spec
       (spec/precondition this (constantly false) (fn [_] "this key is read-only"))))
   (explain [this] (list 'read-only (s/explain schema))))
+
 (defn read-only [schema] (->ReadOnly schema))
 
 (defrecord Hidden [schema]
@@ -108,7 +108,7 @@
 
 (defn walk-schema [schema key-fn value-fn
                    & {:keys [skip-hidden? skip-read-only? skip-unwrap-for transform-map transform-seq]
-                      :or   {skip-hidden? false skip-read-only? false skip-unwrap-for (fn [path v] false)
+                      :or   {skip-hidden?  false skip-read-only? false skip-unwrap-for (fn [path v] false)
                              transform-map (fn [path v] v) transform-seq (fn [path v] v)}
                       :as   args}]
   ((fn walk [path v]

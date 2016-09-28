@@ -15,13 +15,13 @@
 (def db (mg/get-db (mg/connect) "test"))
 
 (def fixtures {"users"    [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :username "user 1" :email "user1@c1.com" :password "secret"}
-                           {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :username "user 2" :email "user2@c1.com" :password "secret"}
+                           {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :username "user 2" :email "user2@c1.com" :password "secret" :friends [(ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3")]}
                            {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3") :username "user 3" :email "user3@c2.com"}]
                "comments" [{:_id (ObjectId. "ccccccccccccccccccccccc1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :text "this company is cool" :extra "extra field"}
                            {:_id (ObjectId. "ccccccccccccccccccccccc2") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "love you guys :D"}
                            {:_id (ObjectId. "ccccccccccccccccccccccc3") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "spam"}
                            {:_id (ObjectId. "ccccccccccccccccccccccc4") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "has been deleted" :_deleted true}]
-               "likes"    []})
+               "likes"    [{:_id (ObjectId. "fffffffffffffffffffffff1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :comment (ObjectId. "ccccccccccccccccccccccc2")}]})
 
 (def store-inst
   (store/map->MongoDataSource {:db db}))
@@ -54,8 +54,9 @@
 (def PublicUsersResource
   {:datasource         {:source "users"}
    :grape.graphql/type 'PublicUser
-   :schema             {:_id      s/Str
-                        :username s/Str}
+   :schema             {:_id      ObjectId
+                        :username s/Str
+                        (? :friends)  [(resource-embedded :public-users :friends ObjectId)]}
    :url                "public_users"
    :operations         #{:read}})
 
@@ -63,7 +64,7 @@
   {:datasource         {:source "comments"}
    :grape.graphql/type 'Comment
    :schema             {(? :_id)          ObjectId
-                        :user             (resource-embedded :public-users :user ObjectId)
+                        (? :user)         (s/maybe (resource-embedded :public-users :user ObjectId))
                         :text             s/Str
                         (? :parent)       (s/maybe (resource-embedded :comments :parent ObjectId))
                         (? :last_replies) (read-only [(resource-embedded :comments :last_replies ObjectId)])
@@ -99,9 +100,9 @@
    :url                "likes"
    :operations         #{:create :read :delete}
    :public-operations  #{:read}
-   :auth-strategy      {:type       :field
-                        :auth-field :user
-                        :doc-field  :user}
+   ;:auth-strategy      {:type       :field
+   ;                     :auth-field :user
+   ;                     :doc-field  :user}
    :post-create        (fn [deps resource request payload]
                          ; update the like counter on the corresponding comment
                          (mc/update (get-in deps [:store :db]) "comments"
@@ -144,6 +145,18 @@
         node {
           id
           text
+          user {
+            username
+            friends {
+              id
+              username
+            }
+          }
+          likes {
+            user {
+              username
+            }
+          }
         }
       }
       pageInfo {
@@ -157,5 +170,8 @@
     Comments(id:\"ccccccccccccccccccccccc1\") {
       id
       text
+      user {
+        username
+      }
     }
   }")
