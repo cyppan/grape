@@ -97,15 +97,17 @@
 
 (defn data-fetcher [f]
   (reify DataFetcher
-    (get [this ^DataFetchingEnvironment environment]
-      (prn "calling data-fetcher" environment)
-      (f environment))))
+    (get [this ^DataFetchingEnvironment env]
+      (prn "calling data-fetcher" env)
+      (let [[deps request] (.getContext env)]
+        (f deps request env)))))
 
 (defn batched-data-fetcher [f]
   (reify BatchedDataFetcher
-    (get [this ^DataFetchingEnvironment environment]
-      (prn "calling batched-data-fetcher" environment)
-      (f environment))))
+    (get [this ^DataFetchingEnvironment env]
+      (prn "calling batched-data-fetcher" env)
+      (let [[deps request] (.getContext env)]
+        (f deps request env)))))
 
 (defn to-clj [data]
   (cond
@@ -123,19 +125,10 @@
 
 (defn mongo->graphql [type]
   (fn [obj]
-    (->> obj
-         ;(map (fn [[k v]]
-         ;       (cond
-         ;         (instance? ObjectId v) [k (str v)]
-         ;         (and (sequential? v) (instance? ObjectId (first v))) [k (map str v)]
-         ;         :else [k v])))
-         (map (fn [[k v]]
-                (if (= :_id k)
-                  [:id v]
-                  [k v])))
-         (into {})
-         (#(assoc % :_type type))
-         clojure.walk/stringify-keys)))
+    (-> obj
+        (clojure.set/rename-keys {:_id :id})
+        (assoc :_type type)
+        clojure.walk/stringify-keys)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Relay
@@ -150,7 +143,7 @@
 
 (defn connection-data-fetcher [f]
   (data-fetcher
-    (fn [^DataFetchingEnvironment env]
+    (fn [deps request ^DataFetchingEnvironment env]
       (let [limit (or (.getArgument env "first") 50)
             ;b64-decode (fn [str]
             ;             (String. (.decode (Base64/getDecoder) (.getBytes str "UTF-8")) "UTF-8"))
@@ -178,7 +171,6 @@
                    :sort     sort
                    :paginate {:skip skip :limit limit}
                    :opts     {:count? true :paginate? true :sort? true}}
-            [deps request] (.getContext env)
             {:keys [_count _documents]} (f deps request query env)]
         {"pageInfo" {"hasNextPage" (> _count (count _documents))}
          "edges"    (map-indexed
@@ -190,9 +182,8 @@
 (defn type-ref-data-fetcher [^grape.graphql.GrapeTypeRef grape-type-ref & {:keys [many?]}]
   (let [[name type resource-key field] (.state grape-type-ref)]
     (batched-data-fetcher
-      (fn [^DataFetchingEnvironment env]
-        (let [[{:keys [resources-registry] :as deps} request] (.getContext env)
-              source (.getSource env)
+      (fn [{:keys [resources-registry] :as deps} request ^DataFetchingEnvironment env]
+        (let [source (.getSource env)
               resource (get resources-registry resource-key)
               _type (:grape.graphql/type resource)
               fields (mapv #(.getName %) (.getSelections (.getSelectionSet (first (.getFields env)))))
@@ -402,9 +393,8 @@
                              type
                              :arguments [(argument "id" type-id-schema)]
                              :data-fetcher (data-fetcher
-                                             (fn [^DataFetchingEnvironment env]
+                                             (fn [deps request ^DataFetchingEnvironment env]
                                                (let [query {:find {:_id (.getArgument env "id")}}
-                                                     [deps request] (.getContext env)
                                                      item (read-item deps resource request query)]
                                                  ((mongo->graphql type-name) item)))))])
                    flatten)

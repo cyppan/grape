@@ -100,9 +100,9 @@
    :url                "likes"
    :operations         #{:create :read :delete}
    :public-operations  #{:read}
-   ;:auth-strategy      {:type       :field
-   ;                     :auth-field :user
-   ;                     :doc-field  :user}
+   :auth-strategy      {:type       :field
+                        :auth-field :user
+                        :doc-field  :user}
    :post-create        (fn [deps resource request payload]
                          ; update the like counter on the corresponding comment
                          (mc/update (get-in deps [:store :db]) "comments"
