@@ -34,5 +34,6 @@
   :aot [grape.graphql.GrapeTypeRef]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl      {:main dev}
-             :dev       {:dependencies [[org.clojure/tools.namespace "0.2.11"]]
+             :dev       {:dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                        [org.slf4j/slf4j-simple "1.7.21"]]
                          :source-paths ["dev"]}})

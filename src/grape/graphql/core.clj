@@ -98,16 +98,22 @@
 (defn data-fetcher [f]
   (reify DataFetcher
     (get [this ^DataFetchingEnvironment env]
-      (prn "calling data-fetcher" env)
-      (let [[deps request] (.getContext env)]
-        (f deps request env)))))
+      (prn "calling data-fetcher")
+      (try
+        (let [[deps request] (.getContext env)]
+          (f deps request env))
+        (catch Exception ex
+          (log/error ex))))))
 
 (defn batched-data-fetcher [f]
   (reify BatchedDataFetcher
     (get [this ^DataFetchingEnvironment env]
-      (prn "calling batched-data-fetcher" env)
-      (let [[deps request] (.getContext env)]
-        (f deps request env)))))
+      (prn "calling batched-data-fetcher")
+      (try
+        (let [[deps request] (.getContext env)]
+          (f deps request env))
+        (catch Exception ex
+          (log/error ex))))))
 
 (defn to-clj [data]
   (cond
@@ -153,6 +159,7 @@
                    (if-let [after (.getArgument env "after")]
                      (-> after read-string))
                    0)
+            _ (clojure.pprint/pprint (.getArguments env))
             find (or
                    (if-let [find (.getArgument env "find")]
                      (try
@@ -171,6 +178,7 @@
                    :sort     sort
                    :paginate {:skip skip :limit limit}
                    :opts     {:count? true :paginate? true :sort? true}}
+            _ (clojure.pprint/pprint query)
             {:keys [_count _documents]} (f deps request query env)]
         {"pageInfo" {"hasNextPage" (> _count (count _documents))}
          "edges"    (map-indexed
@@ -186,39 +194,35 @@
         (let [source (.getSource env)
               resource (get resources-registry resource-key)
               _type (:grape.graphql/type resource)
-              fields (mapv #(.getName %) (.getSelections (.getSelectionSet (first (.getFields env)))))
-              query {:find   (case type
-                               :join
-                               {field {:$in (distinct (map #(get % "id") source))} :_deleted {:$ne true}}
-                               :embedded
-                               {:_id {:$in (->> source
-                                                (map #(get % (clojure.core/name field)))
-                                                flatten
-                                                distinct
-                                                (filter identity))}})
-                     :fields (distinct (conj fields field))}
-              resources-by-field (->> (read-resource deps resource request query)
-                                      :_documents
-                                      (group-by (case type
-                                                  :join field
-                                                  :embedded :_id))
-                                      (map (fn [[k v]] [k (map (mongo->graphql _type) v)]))
-                                      (into {}))]
-          (when (= resource-key :likes)
-            (clojure.pprint/pprint resources-by-field)
-            (prn field (->> source
-                            (map #(get % "id")))))
-          (if many?
-            (->> source
-                 (map #(get % (clojure.core/name field)))
-                 (map (fn [refs]
-                        (map (comp first resources-by-field) refs))))
-            (->> source
-                 (map #(get % (clojure.core/name field)))
-                 (map (comp first resources-by-field)))))))))
+              fields (mapv #(.getName %) (.getSelections (.getSelectionSet (first (.getFields env)))))]
+
+          (cond
+            (= type :join)
+            (let [ids (->> source (map #(get % "id")) distinct)
+                  to-join (read-resource deps resource request {:find   {field {:$in ids} :_deleted {:$ne true}}
+                                                                :fields (distinct (conj fields field))})]
+              (->> source
+                   (map #(get % "id"))
+                   (map (fn [id]
+                          (cond->> (:_documents to-join)
+                                   true (filter #(= id (field %)))
+                                   true (map (mongo->graphql _type))
+                                   (not many?) first)))))
+
+            (= type :embedded)
+            (let [ids (->> source (map #(get % (clojure.core/name field))) flatten distinct)
+                  to-join (read-resource deps resource request {:find   {:_id {:$in ids} :_deleted {:$ne true}}
+                                                                :fields (distinct (conj fields field))})]
+              (->> source
+                   (map #(get % (clojure.core/name field)))
+                   (map (fn [id-or-ids]
+                          (cond->> (:_documents to-join)
+                                   true (filter #((if (sequential? id-or-ids) (into #{} id-or-ids) #{id-or-ids}) (:_id %)))
+                                   true (map (mongo->graphql _type))
+                                   (not many?) first)))))))))))
 
 (def connection-args
-  (.getConnectionFieldArguments relay))
+  (.getForwardPaginationConnectionFieldArguments relay))
 
 (defn node-interface [type-resolver]
   (.nodeInterface relay type-resolver))
@@ -320,15 +324,13 @@
                                     (map (fn [[k v]]
                                            (cond
                                              (and (instance? GraphQLList v) (instance? GraphQLNonNull (.getWrappedType v)) (type-ref? (.getWrappedType (.getWrappedType v))))
-                                             (field k v
-                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType (.getWrappedType v)) :many? true))
+                                             (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType (.getWrappedType v)) :many? true))
                                              (and (instance? GraphQLList v) (type-ref? (.getWrappedType v)))
-                                             (field k v
-                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType v) :many? true))
-                                             (or (type-ref? v)
-                                                 (and (instance? GraphQLNonNull v) (type-ref? (.getWrappedType v))))
-                                             (field k v
-                                                    :data-fetcher (type-ref-data-fetcher (.getWrappedType v)))
+                                             (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType v) :many? true))
+                                             (and (instance? GraphQLNonNull v) (type-ref? (.getWrappedType v)))
+                                             (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType v)))
+                                             (type-ref? v)
+                                             (field k v :data-fetcher (type-ref-data-fetcher v))
                                              :else
                                              (field k v)))))))
       :transform-seq (fn [path v]

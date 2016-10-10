@@ -14,7 +14,7 @@
 
 (def db (mg/get-db (mg/connect) "test"))
 
-(def fixtures {"users"    [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :username "user 1" :email "user1@c1.com" :password "secret"}
+(def fixtures {"users"    [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :username "user 1" :email "user1@c1.com" :password "secret" :godchild (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
                            {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :username "user 2" :email "user2@c1.com" :password "secret" :friends [(ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3")]}
                            {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3") :username "user 3" :email "user3@c2.com"}]
                "comments" [{:_id (ObjectId. "ccccccccccccccccccccccc1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :text "this company is cool" :extra "extra field"}
@@ -29,17 +29,19 @@
 (def UsersResource
   {:datasource         {:source "users"}
    :grape.graphql/type 'User
-   :schema             {(? :_id)      ObjectId
-                        :username     (s/constrained s/Str
-                                                     #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
-                                                     "username-should-be-valid")
-                        :email        (s/constrained s/Str
-                                                     email?)
-                        :password     (hidden s/Str)
-                        (? :comments) (read-only [(resource-join :comments :user)])
-                        (? :friends)  [(resource-embedded :users :friends ObjectId)]
-                        (? :_created) (read-only DateTime)
-                        (? :_updated) (read-only DateTime)}
+   :schema             {(? :_id)       ObjectId
+                        :username      (s/constrained s/Str
+                                                      #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
+                                                      "username-should-be-valid")
+                        :email         (s/constrained s/Str
+                                                      email?)
+                        :password      (hidden s/Str)
+                        (? :comments)  (read-only [(resource-join :comments :user)])
+                        (? :godfather) (read-only (resource-join :public-users :godchild))
+                        (? :godchild)  (s/maybe (resource-embedded :public-users :godchild ObjectId))
+                        (? :friends)   [(resource-embedded :users :friends ObjectId)]
+                        (? :_created)  (read-only DateTime)
+                        (? :_updated)  (read-only DateTime)}
    :url                "users"
    :operations         #{:create :read :update :delete}
    :public-operations  #{:create}
@@ -54,9 +56,12 @@
 (def PublicUsersResource
   {:datasource         {:source "users"}
    :grape.graphql/type 'PublicUser
-   :schema             {:_id      ObjectId
-                        :username s/Str
-                        (? :friends)  [(resource-embedded :public-users :friends ObjectId)]}
+   :schema             {:_id           ObjectId
+                        :username      s/Str
+                        (? :comments)  (read-only [(resource-join :comments :user)])
+                        (? :godfather) (read-only (resource-join :public-users :godchild))
+                        (? :godchild)  (s/maybe (resource-embedded :public-users :godchild ObjectId))
+                        (? :friends)   [(resource-embedded :public-users :friends ObjectId)]}
    :url                "public_users"
    :operations         #{:read}})
 
@@ -112,7 +117,7 @@
 
 (def config {:http-server      {:host "localhost" :port 8080}
              :default-paginate {:per-page 10}
-             :default-sort     {:sort {:_created -1}}
+             :default-sort     {:_created -1}
              :jwt              {:audience    "api"
                                 :secret      "secret"
                                 :auth-schema {:user ObjectId
@@ -137,6 +142,12 @@
     (doseq [doc docs]
       (mc/insert db coll doc))))
 
+;; This query tests the four kinds of join capabilities
+;; DB requests are optimized and should not query more than 6 times (including one for fetching the comments list)
+;; * Single embedded resource -> comment.user + like.user (2 more)
+;; * Many embedded resources -> user.friends (1 more)
+;; * Single join resource -> user.godfather (1 more)
+;; * Many join resources -> comment.likes (1 more)
 (def CommentsListQuery
   "query CommentsListQuery($first: Int, $sort: String, $find: String) {
     CommentsList(first: $first, sort: $sort, find: $find) {
@@ -148,6 +159,10 @@
           user {
             username
             friends {
+              id
+              username
+            }
+            godfather {
               id
               username
             }
