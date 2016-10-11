@@ -101,9 +101,7 @@
       ;(prn "calling data-fetcher")
       (try
         (let [[deps request] (.getContext env)]
-          (f deps request env))
-        (catch Exception ex
-          (log/error ex))))))
+          (f deps request env))))))
 
 (defn batched-data-fetcher [f]
   (reify BatchedDataFetcher
@@ -111,9 +109,7 @@
       ;(prn "calling batched-data-fetcher")
       (try
         (let [[deps request] (.getContext env)]
-          (f deps request env))
-        (catch Exception ex
-          (log/error ex))))))
+          (f deps request env))))))
 
 (defn to-clj [data]
   (cond
@@ -235,10 +231,10 @@
                        (not params) (.execute q [deps request]))]
     (if-let [data (.getData result)]
       (to-clj data)
-      (do (prn "ERROR")
-          (doseq [err (.getErrors result)]
-            (log/error err))
-          (to-clj (.getErrors result))))))
+      ;(do (prn "ERROR")
+      ;(doseq [err (.getErrors result)]
+      ;  (log/error err))
+      (throw (ex-info "query failed" {:errors (to-clj (.getErrors result))})))))
 
 (def ScalarDateTime
   (GraphQLScalarType. "DateTime" "date time string or timestamp"

@@ -35,31 +35,6 @@
           merged (deep-merge map1 map2)]
       (is (= merged {:one "one" :embedded {:one "one" :two "two overriden" :three "three"}})))))
 
-(deftest flatten-structure-test
-  (testing "nil"
-    (is (= (flatten-structure nil) nil)))
-  (testing "empty"
-    (is (= (flatten-structure {}) '())))
-  (testing "one level"
-    (is (= (flatten-structure {:one "one" :two "two"})
-           '([[:one] "one"] [[:two] "two"]))))
-  (testing "two levels"
-    (is (= (flatten-structure {:one "one" :embedded {:one "one" :two "two"}})
-           '([[:one] "one"] [[:embedded :one] "one"] [[:embedded :two] "two"]))))
-  (testing "two levels with array"
-    (is (= (flatten-structure {:one "one" :seq [1 2]})
-           '([[:one] "one"] [[:seq []] 1] [[:seq []] 2]))))
-  (testing "two levels with array of objects"
-    (is (= (flatten-structure {:one "one" :seq [{:one "one"} {:two "two"}]})
-           '([[:one] "one"] [[:seq [] :one] "one"] [[:seq [] :two] "two"])))))
-
-(deftest expand-keyseqs-test
-  (testing "with sequence expanded"
-    (let [schema {:one      s/Str
-                  :embedded [{:one s/Int :two s/Int}]}]
-      (is (= (get-schema-keyseqs schema)
-             #{[:one] [:embedded] [:embedded []] [:embedded [] :one] [:embedded [] :two]})))))
-
 (deftest walk-structure-test
   (testing "map values"
     (let [schema {:one "one" :seq [{:un "un"}] :embedded {:uno "uno"}}

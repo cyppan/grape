@@ -5,10 +5,32 @@
             [grape.store :refer :all]
             [grape.fixtures.comments :refer :all]
             [grape.graphql.core :refer [execute]])
-  (:import (org.bson.types ObjectId)))
+  (:import (org.bson.types ObjectId)
+           (clojure.lang ExceptionInfo)))
 
 (deftest graphql-item
-  (testing ""))
+  (testing "user fetch is protected"
+    (let [resp (execute deps {}
+                        "query UserQuery {
+                          Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
+                            username
+                            email
+                          }
+                        }"
+                        {})]
+      (is (= {"Users" nil} resp))))
+
+  (testing "user fetch with auth is accessible"
+    (let [resp (execute deps {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
+                        "query UserQuery {
+                          Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
+                            username
+                            email
+                          }
+                        }"
+                        {})]
+      (is (= {"Users" {"username" "newone", "email" "coucou@coucou.com"}} resp))))
+  )
 
 (deftest graphql-list
   (testing ""))

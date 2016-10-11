@@ -1,6 +1,5 @@
 (ns grape.hooks.restricts-fields
-  (:require [grape.schema :refer :all]
-            [grape.utils :refer [expand-keyseqs]])
+  (:require [grape.schema :refer :all])
   (:import (grape.schema Hidden)))
 
 (def hooks

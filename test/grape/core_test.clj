@@ -8,7 +8,6 @@
 
 ;; TODO test relations not existing
 ;; TODO test pagination null
-;; TODO check why fields are not injected
 
 (deftest integration
 
@@ -116,5 +115,4 @@
                                  {:find {:_id "ccccccccccccccccccccccc1"} :relations {(keyword "likes.[]") {}}})]
       (is (= {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")
               :comment (ObjectId. "ccccccccccccccccccccccc1")}
-             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user]))))))
-  )
+             (-> fetched (get-in [:_documents 0 :likes 0]) (select-keys [:comment :user])))))))
