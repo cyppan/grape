@@ -68,7 +68,7 @@
     (load-fixtures)
     (let [fetched (read-resource deps CommentsResource {} {:find {} :relations {:user {}}})]
       (doseq [i (take (count (:_documents fetched)) (range))]
-        (is (= #{:_id :username}
+        (is (every? #{:_id :username :friends :godchild}
                (-> fetched (get-in [:_documents i :user]) keys set))))))
 
   (testing "embedding comments in user"

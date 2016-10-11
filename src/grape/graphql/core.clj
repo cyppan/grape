@@ -98,7 +98,7 @@
 (defn data-fetcher [f]
   (reify DataFetcher
     (get [this ^DataFetchingEnvironment env]
-      (prn "calling data-fetcher")
+      ;(prn "calling data-fetcher")
       (try
         (let [[deps request] (.getContext env)]
           (f deps request env))
@@ -108,7 +108,7 @@
 (defn batched-data-fetcher [f]
   (reify BatchedDataFetcher
     (get [this ^DataFetchingEnvironment env]
-      (prn "calling batched-data-fetcher")
+      ;(prn "calling batched-data-fetcher")
       (try
         (let [[deps request] (.getContext env)]
           (f deps request env))
@@ -159,7 +159,6 @@
                    (if-let [after (.getArgument env "after")]
                      (-> after read-string))
                    0)
-            _ (clojure.pprint/pprint (.getArguments env))
             find (or
                    (if-let [find (.getArgument env "find")]
                      (try
@@ -178,9 +177,8 @@
                    :sort     sort
                    :paginate {:skip skip :limit limit}
                    :opts     {:count? true :paginate? true :sort? true}}
-            _ (clojure.pprint/pprint query)
             {:keys [_count _documents]} (f deps request query env)]
-        {"pageInfo" {"hasNextPage" (> _count (count _documents))}
+        {"pageInfo" {"hasNextPage" (< (+ skip limit) _count)}
          "edges"    (map-indexed
                       (fn [i doc]
                         {"cursor" (str (+ i skip 1))

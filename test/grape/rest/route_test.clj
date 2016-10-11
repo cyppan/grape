@@ -63,7 +63,7 @@
                    :request-method :get}
           resp (:body (handler request))]
       (is (= 3 (:_count resp)))
-      (is (= #{:_id :username} (->> (:_items resp)
+      (is (= #{:_id :godchild :username} (->> (:_items resp)
                                     first
                                     keys
                                     (into #{}))))
