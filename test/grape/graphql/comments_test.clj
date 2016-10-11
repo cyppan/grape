@@ -30,6 +30,17 @@
                         }"
                         {})]
       (is (= {"Users" {"username" "newone", "email" "coucou@coucou.com"}} resp))))
+
+  (testing "user fetch using item alias"
+    (let [resp (execute deps {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
+                        "query MeQuery {
+                          Me {
+                            username
+                            email
+                          }
+                        }"
+                        {})]
+      (is (= {"Me" {"username" "newone", "email" "coucou@coucou.com"}} resp))))
   )
 
 (deftest graphql-list

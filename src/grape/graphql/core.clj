@@ -375,23 +375,32 @@
                          :let [type-name (name (->PascalCase resource-key))
                                type (get types-map type-name)
                                type-id-schema (.getType (.getFieldDefinition type "id"))]]
-                     [(field (str type-name "List")
-                             (connection (name resource-key) type type-resolver)
-                             :arguments (concat connection-args
-                                                [(argument "sort" Scalars/GraphQLString)
-                                                 (argument "find" Scalars/GraphQLString)])
-                             :data-fetcher (connection-data-fetcher
-                                             (fn [deps request query ^DataFetchingEnvironment env]
-                                               (let [resources (read-resource deps resource request query)]
-                                                 (update resources :_documents
-                                                         (partial map (mongo->graphql type-name)))))))
-                      (field type-name
-                             type
-                             :arguments [(argument "id" type-id-schema)]
-                             :data-fetcher (data-fetcher
-                                             (fn [deps request ^DataFetchingEnvironment env]
-                                               (let [query {:find {:_id (.getArgument env "id")}}
-                                                     item (read-item deps resource request query)]
-                                                 ((mongo->graphql type-name) item)))))])
+                     (concat
+                       [(field (str type-name "List")
+                               (connection (name resource-key) type type-resolver)
+                               :arguments (concat connection-args
+                                                  [(argument "sort" Scalars/GraphQLString)
+                                                   (argument "find" Scalars/GraphQLString)])
+                               :data-fetcher (connection-data-fetcher
+                                               (fn [deps request query ^DataFetchingEnvironment env]
+                                                 (let [resources (read-resource deps resource request query)]
+                                                   (update resources :_documents
+                                                           (partial map (mongo->graphql type-name)))))))
+                        (field type-name
+                               type
+                               :arguments [(argument "id" type-id-schema)]
+                               :data-fetcher (data-fetcher
+                                               (fn [deps request ^DataFetchingEnvironment env]
+                                                 (let [query {:find {:_id (.getArgument env "id")}}
+                                                       item (read-item deps resource request query)]
+                                                   ((mongo->graphql type-name) item)))))]
+                       (for [[route f] (:item-aliases resource)]
+                         (field (->PascalCase route)
+                                type
+                                :data-fetcher (data-fetcher
+                                                (fn [deps request ^DataFetchingEnvironment env]
+                                                  (let [query {:find {:_id (f deps resource request)}}
+                                                        item (read-item deps resource request query)]
+                                                    ((mongo->graphql type-name) item))))))))
                    flatten)
               :interfaces [(node-interface type-resolver)]))))
