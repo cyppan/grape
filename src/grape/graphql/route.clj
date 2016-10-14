@@ -3,12 +3,10 @@
             [grape.graphql.core :refer [execute]]))
 
 (defn relay-handler [deps request]
-  (let [resp (execute deps {}
-                      "query UserQuery {
-                        Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
-                          username
-                          email
-                        }
-                      }"
-                      {})]
-    (clojure.pprint/pprint resp)))
+  (let [query (get-in request [:body :query])
+        variables (get-in request [:body :variables])
+        result (execute deps request
+                        query
+                        variables)]
+    {:status 200
+     :body   result}))

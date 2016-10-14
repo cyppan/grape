@@ -33,18 +33,14 @@
 (defn start
   "Starts the system running, updates the Var #'system."
   []
-  (let [{conn :conn db :db} (mg/connect-via-uri mongo-uri)
-        deps (assoc deps
-               :store (store/map->MongoDataSource {:db db}))]
-    (alter-var-root #'mongo-conn (constantly conn))
-    (alter-var-root #'system (constantly deps))))
+  (alter-var-root #'system (constantly
+                             (com.stuartsierra.component/start-system deps))))
 
 (defn stop
   "Stops the system if it is currently running, updates the Var
   #'system."
   []
-  (alter-var-root #'mongo-conn (fn [v] mg/disconnect))
-  (alter-var-root #'system (fn [v] (constantly {}))))
+  (alter-var-root #'system (fn [s] (com.stuartsierra.component/stop-system s))))
 
 (defn go
   "Initializes and starts the system running."

@@ -6,13 +6,19 @@
             [monger.core :as mg]
             [monger.collection :as mc]
             [grape.core :refer [read-item partial-update-resource]]
-            [grape.graphql.core :refer [build-schema]])
+            [grape.graphql.core :refer [build-schema]]
+            [grape.graphql.route :refer [relay-handler]]
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
+            [ring.middleware.cors :refer [wrap-cors]]
+            [grape.http :refer :all]
+            [bidi.ring :refer [make-handler]]
+            [grape.rest.route :refer [build-resources-routes]])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)
            (graphql GraphQL)
-           (graphql.execution.batched BatchedExecutionStrategy)))
-
-(def db (mg/get-db (mg/connect) "test"))
+           (graphql.execution.batched BatchedExecutionStrategy)
+           (clojure.lang ExceptionInfo)))
 
 (def fixtures {"users"    [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :username "user 1" :email "user1@c1.com" :password "secret" :godchild (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
                            {:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :username "user 2" :email "user2@c1.com" :password "secret" :friends [(ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa3")]}
@@ -23,18 +29,15 @@
                            {:_id (ObjectId. "ccccccccccccccccccccccc4") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2") :text "has been deleted" :_deleted true}]
                "likes"    [{:_id (ObjectId. "fffffffffffffffffffffff1") :user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :comment (ObjectId. "ccccccccccccccccccccccc2")}]})
 
-(def store-inst
-  (store/map->MongoDataSource {:db db}))
-
 (def UsersResource
   {:datasource         {:source "users"}
    :grape.graphql/type 'User
    :schema             {(? :_id)       ObjectId
-                        :username      (s/constrained s/Str
-                                                      #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %)
-                                                      "username-should-be-valid")
-                        :email         (s/constrained s/Str
-                                                      email?)
+                        :username      (s/both
+                                         (s/constrained s/Str #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %) "username-should-be-valid")
+                                         (s/constrained s/Str (unique? :username) "username-should-be-unique"))
+                        (? :type)      (s/maybe (s/constrained s/Str #{"publisher" "user"} "type-should-by-valid"))
+                        :email         (s/constrained s/Str email? "email-should-be-valid")
                         :password      (hidden s/Str)
                         (? :comments)  (read-only [(resource-join :comments :user)])
                         (? :godfather) (read-only (resource-join :public-users :godchild))
@@ -130,13 +133,74 @@
    :comments     CommentsResource
    :likes        LikesResource})
 
-(def deps {:store              store-inst
+(def app-routes
+  (fn [deps]
+    (make-handler ["/" (concat
+                         (build-resources-routes deps)
+                         [["relay" (partial relay-handler deps)]]
+                         [[true (fn [_] {:status 404 :body {:_status 404 :_message "not found"}})]])])))
+
+(defn exception-middleware
+  "catches ExceptionInfos and returns the relevant HTTP response"
+  [handler]
+  (fn [request]
+    (try
+      (handler request)
+      (catch ExceptionInfo ex
+        (let [type (:type (ex-data ex))
+              issues (:issues (ex-data ex))
+              body (merge
+                     {:_error (.getMessage ex)}
+                     (when issues {:_issues issues}))]
+          (case type
+            :unauthorized
+            {:status 401
+             :body   body}
+            :forbidden
+            {:status 403
+             :body   body}
+            :not-found
+            {:status 404
+             :body   body}
+            :bad-request
+            {:status 422
+             :body   body}
+            (do
+              (prn ex)
+              {:status 500
+               :body   body})))))))
+
+(defn the-wall
+  "last guard before the north, in case of a beyond-the-wall json parse attack for instance"
+  [handler]
+  (fn [request]
+    (try
+      (handler request)
+      (catch Exception e
+        (prn e)
+        {:status 500
+         :body   (.getMessage e)}))))
+
+(defn app-wrapper [deps]
+  (fn [handler]
+    (-> handler
+        wrap-json-response
+        (wrap-json-body {:keywords? true})
+        (wrap-jwt-auth (:jwt config))
+        wrap-params
+        exception-middleware
+        the-wall
+        (wrap-cors identity))))
+
+(def deps {:store              (store/new-mongo-datasource (:mongo-db config))
            :resources-registry resources-registry
            :graphql            (GraphQL. (build-schema {:resources-registry resources-registry}) (BatchedExecutionStrategy.))
            :hooks              hooks
-           :config             config})
+           :config             config
+           :http-server        (new-http-server (:http-server config) app-routes app-wrapper
+                                                [:store :resources-registry :config :hooks :graphql])})
 
-(defn load-fixtures []
+(defn load-fixtures [{{db :db} :store}]
   (doseq [[coll docs] fixtures]
     (mc/drop db coll)
     (doseq [doc docs]

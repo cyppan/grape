@@ -7,7 +7,10 @@
             [grape.fixtures.comments :refer :all]
             [slingshot.slingshot :refer [throw+ try+]]
             [clj-time.core :as t]
-            [clj-time.coerce :as c])
+            [clj-time.coerce :as c]
+            [grape.test-utils :refer :all]
+            [clj-http.client :as http]
+            [clj-time.format :as f])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)))
 
@@ -64,125 +67,170 @@
           resp (:body (handler request))]
       (is (= 3 (:_count resp)))
       (is (= #{:_id :godchild :username} (->> (:_items resp)
-                                    first
-                                    keys
-                                    (into #{}))))
+                                              first
+                                              keys
+                                              (into #{}))))
       (is (= #{"user 1" "user 2" "user 3"} (->> (:_items resp)
                                                 (map :username)
                                                 (into #{})))))))
 
 (deftest create-resource
-  (testing "create - validation fails - required fields"
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users")
-          handler (:handler match)
-          request {:query-params   {"query" ""} :body {}
-                   :request-method :post}
-          resp (handler request)]
-      (is (= 422 (:status resp)))))
+  (testing "create user - validation fails - required fields"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             "{}"})]
+          (is (= (:status resp) 422))
+          (is (= (get-in resp [:body :_issues])
+                 {:email "missing-required-key" :password "missing-required-key" :username "missing-required-key"}))))))
 
-  ;(testing "create - validation fails - user not found"
-  ;  (load-fixtures)
-  ;  (let [routes ["/" (build-resources-routes deps)]
-  ;        match (match-route routes "/comments")
-  ;        handler (:handler match)
-  ;        request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-  ;                 :body           {:user (ObjectId. "ffffffffffffffffffffffff")
-  ;                                  :text "toto"}
-  ;                 :request-method :post}
-  ;        resp (handler request)]
-  ;    (is (= 422 (:status resp)))
-  ;    (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
+  (testing "create user - validation fails username and email invalids"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             (generate-string {:email "coucou" :password "secret" :username "$°+#@"})})]
+          (is (= (:status resp) 422))
+          (is (= (get-in resp [:body :_issues])
+                 {:email "email-should-be-valid" :username "username-should-be-valid"}))))))
 
-  (testing "create success"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users")
-          handler (:handler match)
-          request {:body           {:username "me"
-                                    :email    "coucou@coucou.com"
-                                    :password "secret"}
-                   :request-method :post}
-          resp (handler request)
-          inserted-id (get-in resp [:body :_id])]
-      (is (not (nil? inserted-id)))
-      (let [match (match-route routes (str "/users/" inserted-id))
-            handler (:handler match)
-            request (merge {:auth           {:user (str inserted-id)}
-                            :request-method :get}
-                           (select-keys match [:route-params]))
-            resp (handler request)]
-        (is (= "me" (get-in resp [:body :username])))
-        (is (= inserted-id (get-in resp [:body :_id]))))
-      (let [match (match-route routes (str "/me"))
-            handler (:handler match)
-            request {:auth           {:user (str inserted-id)}
-                     :request-method :get}
-            resp (handler request)]
-        (is (= "me" (get-in resp [:body :username])))
-        (is (= inserted-id (get-in resp [:body :_id]))))))
+  (testing "create user - validation fails username already exists"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             (generate-string {:email "coucou@coucou.com" :password "secret" :username "user 1"})})]
+          (is (= (:status resp) 422))
+          (is (= (get-in resp [:body :_issues])
+                 {:username "username-should-be-unique"}))))))
+
+  (testing "create user - validation fails friend not found"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             (generate-string {:email   "coucou@coucou.com" :password "secret" :username "abc"
+                                                                   :friends [(ObjectId. "abcabcabcabcabcabcabcabc")]})})]
+          (is (= (:status resp) 422))
+          (is (= (get-in resp [:body :_issues])
+                 {:friends ["resource-should-exist"]}))))))
+
+  (testing "create user - validation fails - invalid type"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             (generate-string {:email "new@email.com" :password "secret" :username "new"
+                                                                   :type  "unknown"})})]
+          (is (= (:status resp) 422))
+          (is (= (get-in resp [:body :_issues])
+                 {:type "type-should-by-valid"}))))))
+
+  (testing "create user - validation success"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/users"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :body             (generate-string {:email "new@email.com" :password "secret" :username "new"
+                                                                   :type  "user"})})]
+          (is (= (:status resp) 201))))))
 
   (testing "create a comment should inject auth field when not specified"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments")
-          handler (:handler match)
-          request {:body           {:text "coucou !"}
-                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :request-method :post}
-          resp (handler request)
-          inserted-id (get-in resp [:body :_id])]
-      (is (not (nil? inserted-id)))
-      (let [match (match-route routes (str "/comments/" inserted-id))
-            handler (:handler match)
-            request (merge {:request-method :get}
-                           (select-keys match [:route-params]))
-            resp (handler request)]
-        (is (= "coucou !" (get-in resp [:body :text])))
-        (is (= inserted-id (get-in resp [:body :_id]))))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/comments"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                               :body             (generate-string {:text "my comment"})})]
+          (is (= (:status resp) 201))
+          (is (= (get-in resp [:body :text ]) "my comment"))
+          (is (= (get-in resp [:body :user]) "aaaaaaaaaaaaaaaaaaaaaaa1"))))))
 
   (testing "create a comment specifying itself as a user should pass"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments")
-          handler (:handler match)
-          request {:body           {:text "coucou !"
-                                    :user "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :request-method :post}
-          resp (handler request)
-          inserted-id (get-in resp [:body :_id])]
-      (is (not (nil? inserted-id)))
-      (let [match (match-route routes (str "/comments/" inserted-id))
-            handler (:handler match)
-            request (merge {:request-method :get}
-                           (select-keys match [:route-params]))
-            resp (handler request)]
-        (is (= "coucou !" (get-in resp [:body :text])))
-        (is (= inserted-id (get-in resp [:body :_id]))))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/comments"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                               :body             (generate-string {:text "my comment" :user "aaaaaaaaaaaaaaaaaaaaaaa1"})})]
+          (is (= (:status resp) 201))
+          (is (= (get-in resp [:body :text ]) "my comment"))
+          (is (= (get-in resp [:body :user]) "aaaaaaaaaaaaaaaaaaaaaaa1"))))))
 
-  (testing "create a comment for another user should be forbidden"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments")
-          handler (:handler match)
-          request {:body           {:text "coucou !"
-                                    :user "aaaaaaaaaaaaaaaaaaaaaaa2"}
-                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :request-method :post}
-          resp (handler request)]
-      (is (= 403 (:status resp)))))
+  (testing "create a comment specifying another user should be forbidden"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/comments"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                               :body             (generate-string {:text "my comment" :user "aaaaaaaaaaaaaaaaaaaaaaa2"})})]
+          (is (= (:status resp) 403))))))
 
-  (testing "create a comment should insert _created and _updated automatically"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments")
-          handler (:handler match)
-          request {:body           {:text "coucou !"}
-                   :auth           {:user "aaaaaaaaaaaaaaaaaaaaaaa1"}
-                   :request-method :post}
-          resp (handler request)]
-      (is (instance? DateTime (get-in resp [:body :_created]))))))
+  (testing "create a comment should insert _created automatically"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (http/post "http://localhost:8080/comments"
+                              {:content-type     :json
+                               :coerce           :always
+                               :throw-exceptions false
+                               :as               :json
+                               :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                               :body             (generate-string {:text "my comment"})})]
+          (is (= (:status resp) 201))
+          (is (instance? DateTime (f/parse (f/formatters :date-time) (get-in resp [:body :_created]))))
+          (let [id (get-in resp [:body :_id])
+                resp (http/get (str "http://localhost:8080/comments/" id)
+                               {:as :json})]
+            (is (instance? DateTime (f/parse (f/formatters :date-time) (get-in resp [:body :_created])))))))))
+  )
 
 (deftest update-resource
   (testing "update - validation fails - not found"
@@ -267,7 +315,7 @@
                                     :password "secret"}
                    :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
                    :request-method :put
-                   :route-params (:route-params match)}
+                   :route-params   (:route-params match)}
           resp (handler request)]
       (is (instance? DateTime (get-in resp [:body :_updated])))
       (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))
@@ -333,7 +381,7 @@
           request {:body           {:username "newone"}
                    :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
                    :request-method :patch
-                   :route-params (:route-params match)}
+                   :route-params   (:route-params match)}
           resp (handler request)]
       (is (instance? DateTime (get-in resp [:body :_updated])))
       (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))

@@ -41,7 +41,7 @@
   (fn [item]
     (let [deps-store (:store *deps*)
           source (get-in *resource* [:datasource :source])]
-      (zero? (store/count deps-store source {:find {field item}} {})))))
+      (zero? (store/count deps-store source {:find {field item :_deleted {:$ne true}}} {})))))
 
 (def email?
   (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
@@ -63,7 +63,7 @@
   (explain [this] (list 'resource-embedded resource-key)))
 
 (defn resource-embedded [resource-key field schema]
-  (->ResourceEmbedded resource-key field schema))
+  (s/constrained (->ResourceEmbedded resource-key field schema) (resource-exists? resource-key) "resource-should-exist"))
 
 (defrecord ResourceJoin [resource-key field schema]
   Schema
