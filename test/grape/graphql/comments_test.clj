@@ -29,7 +29,7 @@
                           }
                         }"
                         {})]
-      (is (= {"Users" {"username" "newone", "email" "coucou@coucou.com"}} resp))))
+      (is (= {"Users" {"username" "user 1", "email" "user1@c1.com"}} resp))))
 
   (testing "user fetch using item alias"
     (let [resp (execute deps {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
@@ -40,7 +40,7 @@
                           }
                         }"
                         {})]
-      (is (= {"Me" {"username" "newone", "email" "coucou@coucou.com"}} resp))))
+      (is (= {"Me" {"username" "user 1", "email" "user1@c1.com"}} resp))))
   )
 
 (deftest graphql-list
