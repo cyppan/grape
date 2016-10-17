@@ -10,37 +10,49 @@
 
 (deftest graphql-item
   (testing "user fetch is protected"
-    (let [resp (execute deps {}
-                        "query UserQuery {
-                          Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
-                            username
-                            email
-                          }
-                        }"
-                        {})]
-      (is (= {"Users" nil} resp))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (execute system {}
+                            "query UserQuery {
+                              Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
+                                username
+                                email
+                              }
+                            }"
+                            {})]
+          (is (= {"Users" nil} resp))))))
 
   (testing "user fetch with auth is accessible"
-    (let [resp (execute deps {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
-                        "query UserQuery {
-                          Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
-                            username
-                            email
-                          }
-                        }"
-                        {})]
-      (is (= {"Users" {"username" "user 1", "email" "user1@c1.com"}} resp))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (execute system {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
+                            "query UserQuery {
+                              Users(id:\"aaaaaaaaaaaaaaaaaaaaaaa1\") {
+                                username
+                                email
+                              }
+                            }"
+                            {})]
+          (is (= {"Users" {"username" "user 1", "email" "user1@c1.com"}} resp))))))
 
   (testing "user fetch using item alias"
-    (let [resp (execute deps {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
-                        "query MeQuery {
-                          Me {
-                            username
-                            email
-                          }
-                        }"
-                        {})]
-      (is (= {"Me" {"username" "user 1", "email" "user1@c1.com"}} resp))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [resp (execute system {:auth {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}}
+                            "query MeQuery {
+                              Me {
+                                username
+                                email
+                              }
+                            }"
+                            {})]
+          (is (= {"Me" {"username" "user 1", "email" "user1@c1.com"}} resp))))))
   )
 
 (deftest graphql-list
@@ -51,7 +63,7 @@
     (with-test-system
       (assoc deps :store (new-mongo-datasource {:uri "mongodb://localhost:27017/test"}))
       (fn [system]
-        (load-fixtures)
+        (load-fixtures system)
         (let [resp (execute system {}
                             "query CommentsListQuery {
                                CommentsList {
@@ -78,7 +90,7 @@
     (with-test-system
       (assoc deps :store (new-mongo-datasource {:uri "mongodb://localhost:27017/test"}))
       (fn [system]
-        (load-fixtures)
+        (load-fixtures system)
         (let [resp (execute system {}
                             "query CommentsListQuery {
                                CommentsList(first: 2) {
@@ -125,7 +137,7 @@
     (with-test-system
       (assoc deps :store (new-mongo-datasource {:uri "mongodb://localhost:27017/test"}))
       (fn [system]
-        (load-fixtures)
+        (load-fixtures system)
         (let [resp (execute system {}
                             "query CommentsListQuery {
                                CommentsList(first: 3) {
@@ -148,7 +160,7 @@
     (with-test-system
       (assoc deps :store (new-mongo-datasource {:uri "mongodb://localhost:27017/test"}))
       (fn [system]
-        (load-fixtures)
+        (load-fixtures system)
         (let [resp (execute system {}
                             "query CommentsListQuery($first: Int, $sort: String, $find: String, $after: String) {
                               CommentsList(first: $first, sort: $sort, find: $find, after: $after) {
