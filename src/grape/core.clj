@@ -141,7 +141,7 @@
         existing (read-item deps resource request {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))
-                       (validate-update deps resource request) ;; let the validation exception throw to the caller
+                       (#(validate-update deps resource request % existing)) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
                        (update store (get-in resource [:datasource :source]) (:_id payload))
                        (#(post-update-fn deps resource request % existing)))]
@@ -156,7 +156,7 @@
         existing (read-item deps resource request {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))
-                       (validate-partial-update deps resource request) ;; let the validation exception throw to the caller
+                       (#(validate-partial-update deps resource request % existing)) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
                        (partial-update store (get-in resource [:datasource :source]) (:_id payload))
                        (#(post-update-fn deps resource request % existing)))]

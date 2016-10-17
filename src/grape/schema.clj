@@ -23,6 +23,8 @@
 (def ^:dynamic *deps* {})
 (def ^:dynamic *resource* {})
 (def ^:dynamic *request* {})
+(def ^:dynamic *payload* {})
+(def ^:dynamic *existing* {})
 
 (def ? s/optional-key)
 
@@ -35,13 +37,19 @@
     (let [resource (resource-key (:resources-registry *deps*))
           deps-store (:store *deps*)
           source (get-in resource [:datasource :source])]
-      (pos? (store/count deps-store source {:find {:_id id}} {})))))
+      (pos? (store/count deps-store source
+                         {:find {:_id id}}
+                         {:soft-delete? (:soft-delete *resource*)})))))
 
 (defn unique? [field]
   (fn [item]
     (let [deps-store (:store *deps*)
           source (get-in *resource* [:datasource :source])]
-      (zero? (store/count deps-store source {:find {field item :_deleted {:$ne true}}} {})))))
+      (zero? (store/count deps-store source
+                          {:find (merge {field item :_deleted {:$ne true}}
+                                                          (when-let [id (:_id *existing*)]
+                                                            {:_id {:$ne id}}))}
+                          {:soft-delete? (:soft-delete *resource*)})))))
 
 (def email?
   (partial re-matches #"^[^@]+@[^@\\.]+[\\.].+"))
@@ -115,6 +123,9 @@
      (cond
        (or (primitive? v) (skip-unwrap-for path v))
        (value-fn path v)
+
+       (and (record? v) (seq (:schemas v)))
+       (walk path (first (:schemas v)))
 
        (record? v)
        (walk path (:schema v))
@@ -235,19 +246,24 @@
 (defn validate-create [{:keys [hooks] :as deps} resource request payload]
   (binding [*deps* deps
             *resource* resource
-            *request* request]
+            *request* request
+            *payload* payload]
     (validate payload (:schema resource))))
 
-(defn validate-update [{:keys [hooks] :as deps} resource request payload]
+(defn validate-update [{:keys [hooks] :as deps} resource request payload existing]
   (binding [*deps* deps
             *resource* resource
-            *request* request]
+            *request* request
+            *payload* payload
+            *existing* existing]
     (validate payload (:schema resource))))
 
-(defn validate-partial-update [{:keys [hooks] :as deps} resource request payload]
+(defn validate-partial-update [{:keys [hooks] :as deps} resource request payload existing]
   (binding [*deps* deps
             *resource* resource
-            *request* request]
+            *request* request
+            *payload* payload
+            *existing* existing]
     ;; for partial update, the schema should have all of its keys optional
-    (let [schema (walk-schema (:schema resource) (comp ? s/explicit-schema-key) (fn [path v] v))]
+    (let [schema (st/optional-keys (:schema resource))]
       (validate payload schema))))

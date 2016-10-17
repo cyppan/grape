@@ -276,7 +276,7 @@
       deps
       (fn [system]
         (load-fixtures system)
-        (let [{status :status :as resp}
+        (let [{status-put :status}
               (http/put "http://localhost:8080/comments/ccccccccccccccccccccccc1"
                         {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
                          :body             (generate-string {:user "aaaaaaaaaaaaaaaaaaaaaaa2"
@@ -284,33 +284,57 @@
                          :content-type     :json
                          :coerce           :always
                          :throw-exceptions false
-                         :as               :json})]
-          (is (= 403 status))))))
+                         :as               :json})
+              {status-patch :status}
+              (http/patch "http://localhost:8080/comments/ccccccccccccccccccccccc1"
+                          {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                           :body             (generate-string {:user "aaaaaaaaaaaaaaaaaaaaaaa2"})
+                           :content-type     :json
+                           :coerce           :always
+                           :throw-exceptions false
+                           :as               :json})]
+          (is (= 403 status-put))
+          (is (= 403 status-patch))))))
 
   (testing "update success"
     (with-test-system
       deps
       (fn [system]
         (load-fixtures system)
-        (let [{status :status {text :text} :body}
+        (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
+              {status-put :status {updated-put :_updated text-put :text} :body}
               (http/put "http://localhost:8080/comments/ccccccccccccccccccccccc1"
                         {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
                          :body             (generate-string {:text "toto"})
                          :content-type     :json
                          :coerce           :always
                          :throw-exceptions false
+                         :as               :json})
+              {status-patch :status {updated-patch :_updated text-patch :text} :body}
+              (http/patch "http://localhost:8080/comments/ccccccccccccccccccccccc1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:text "modified"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
                          :as               :json})]
-          (is (= 200 status))
-          (is (= "toto" text))))))
+          (is (= 200 status-put))
+          (is (= 200 status-patch))
+          (is (= "toto" text-put))
+          (is (= "modified" text-patch))
+          (is (instance? DateTime (f/parse (f/formatters :date-time) updated-put)))
+          (is (not= previous-updated updated-put))
+          (is (instance? DateTime (f/parse (f/formatters :date-time) updated-patch)))
+          (is (not= previous-updated updated-put updated-patch))))))
 
-  (testing "update succes should change the _updated date"
+  (testing "update success should change the _updated date"
     (with-test-system
       deps
       (fn [system]
         (load-fixtures system)
         (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
               {status :status {updated :_updated} :body}
-              (http/put "http://localhost:8080//comments/ccccccccccccccccccccccc1"
+              (http/put "http://localhost:8080/comments/ccccccccccccccccccccccc1"
                         {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
                          :body             (generate-string {:text "toto"})
                          :content-type     :json
@@ -323,69 +347,42 @@
   )
 
 (deftest partial-update-resource
-  (testing "partial update - validation fails - not found"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
-                   :request-method :patch
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status} (handler request)]
-      (is (= 404 status))))
 
-  ;(testing "partial update comment - validation fails - user not found"
-  ;  (load-fixtures)
-  ;  (let [routes ["/" (build-resources-routes deps)]
-  ;        match (match-route routes "/comments/ccccccccccccccccccccccc1")
-  ;        handler (:handler match)
-  ;        request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-  ;                 :body           {:user (ObjectId. "ffffffffffffffffffffffff")}
-  ;                 :request-method :patch
-  ;                 :route-params   (:route-params match)}
-  ;        resp (handler request)]
-  ;    (is (= 422 (:status resp)))
-  ;    (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
-
-  (testing "partial update comment - validation fails - user should be self"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments/ccccccccccccccccccccccc1")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :body           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
-                   :request-method :patch
-                   :route-params   (:route-params match)}
-          resp (handler request)]
-      (is (= 403 (:status resp)))))
+  (testing "partial update failure - username already taken"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
+              {status :status {{:keys [username]} :_issues} :body}
+              (http/patch "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:username "user 2"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 422 status))
+          (is (= username "username-should-be-unique"))))))
 
   (testing "partial update success"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          handler (:handler match)
-          request {:body           {:username "newone"}
-                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :patch
-                   :route-params   (:route-params match)}
-          {status :status {:keys [username email]} :body} (handler request)]
-      (is (= status 200))
-      (is (= username "newone"))))
-
-  (testing "partial update a user should change the _updated date"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          now-before-update (t/now)
-          handler (:handler match)
-          request {:body           {:username "newone"}
-                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :patch
-                   :route-params   (:route-params match)}
-          resp (handler request)]
-      (is (instance? DateTime (get-in resp [:body :_updated])))
-      (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
+              {status :status {updated :_updated username :username} :body :as resp}
+              (http/patch "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:username "user 1"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 200 status))
+          (is (= username "user 1"))
+          (is (instance? DateTime (f/parse (f/formatters :date-time) updated)))
+          (is (not= previous-updated updated))))))
   )
 
 (deftest delete-resource
