@@ -1,6 +1,6 @@
 (ns grape.query-test
   (:require [clojure.test :refer :all]
-            [grape.fixtures :refer [deps]]
+            [grape.fixtures.comments :refer [deps]]
             [grape.query :refer :all]
             [cheshire.core :refer :all])
   (:import (clojure.lang ExceptionInfo)))
@@ -63,5 +63,4 @@
           query {:relations {:parent {:find {:text {:$regex ""}}}}}
           {{{:keys [find relations]} :parent} :relations} (validate-query deps resource {} query {:recur? true})]
       (is (= {:text {:$regex ""}} find))
-      (is (nil? relations))))
-  )
+      (is (nil? relations)))))

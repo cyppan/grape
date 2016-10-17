@@ -12,11 +12,13 @@
     [clojure.test :as test]
     [clojure.tools.namespace.repl :refer [refresh refresh-all]]
     [schema.core :as s]
-    [grape.fixtures :refer [UsersResource PublicUsersResource CommentsResource LikesResource config deps]]
+    [grape.fixtures.comments :refer :all]
     [grape.schema :as gs]
     [monger.core :as mg]
+    [cheshire.core :refer [generate-string parse-string]]
     [grape.store :as store]
-    [grape.hooks.core :refer [hooks]])
+    [grape.hooks.core :refer [hooks]]
+    [grape.graphql.core :refer :all])
   (:import (clojure.lang ExceptionInfo)
            (org.bson.types ObjectId)))
 
@@ -31,22 +33,14 @@
 (defn start
   "Starts the system running, updates the Var #'system."
   []
-  (let [{conn :conn db :db} (mg/connect-via-uri mongo-uri)
-        deps {:store (store/map->MongoDataSource {:db db})
-              :hooks hooks
-              :config config
-              :resources-registry {:users UsersResource
-                                   :public-users PublicUsersResource
-                                   :comments CommentsResource}}]
-    (alter-var-root #'mongo-conn (constantly conn))
-    (alter-var-root #'system (constantly deps))))
+  (alter-var-root #'system (constantly
+                             (com.stuartsierra.component/start-system deps))))
 
 (defn stop
   "Stops the system if it is currently running, updates the Var
   #'system."
   []
-  (alter-var-root #'mongo-conn (fn [v] mg/disconnect))
-  (alter-var-root #'system (fn [v] (constantly {}))))
+  (alter-var-root #'system (fn [s] (com.stuartsierra.component/stop-system s))))
 
 (defn go
   "Initializes and starts the system running."

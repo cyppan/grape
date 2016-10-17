@@ -48,9 +48,9 @@ using hooks on:
 
 From that resources configurations Grape will expose on demand: 
 * A fully functional REST API (Done)
-* A real time subscription end-point as a websocket (TODO)
-* A Relay-compliant GraphQL Server (TODO)
+* A Relay-compliant GraphQL Server (Nearly Done)
 * A Falcor backend (TODO)
+* A real time subscription end-point as a websocket (TODO)
 
 **Examples:**
 
@@ -63,6 +63,7 @@ You'll find in the `examples` folder Grape showcases for:
 ## What's Implemented for the moment
 
 * Full REST Support
+* GraphQL + Relay READ layer
 * MongoDB backend
 
 
@@ -70,7 +71,7 @@ You'll find in the `examples` folder Grape showcases for:
 
 * Support different datasources by resource
 * Real time subscriptions (probably using MongoDB tailable cursors + core.async channels with websocket)
-* GraphQL + Relay support
+* GraphQL + Relay write support
 * Falcor support
 
 

@@ -1,4 +1,4 @@
-(defproject grape "0.1.0-SNAPSHOT"
+(defproject grape "0.1.0"
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"
@@ -28,8 +28,12 @@
                  [ring/ring-core "1.5.0"]
                  [jumblerg/ring.middleware.cors "1.0.1"]
                  [ring/ring-json "0.4.0"]
-                 [clj-http "2.2.0"]]
+                 [clj-http "2.2.0"]
+                 [com.graphql-java/graphql-java "2.1.0"]]
+  :main grape.core
+  :aot [grape.graphql.GrapeTypeRef]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl      {:main dev}
-             :dev       {:dependencies [[org.clojure/tools.namespace "0.2.11"]]
+             :dev       {:dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                        [org.slf4j/slf4j-simple "1.7.21"]]
                          :source-paths ["dev"]}})
