@@ -312,12 +312,12 @@
                          :as               :json})
               {status-patch :status {updated-patch :_updated text-patch :text} :body}
               (http/patch "http://localhost:8080/comments/ccccccccccccccccccccccc1"
-                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
-                         :body             (generate-string {:text "modified"})
-                         :content-type     :json
-                         :coerce           :always
-                         :throw-exceptions false
-                         :as               :json})]
+                          {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                           :body             (generate-string {:text "modified"})
+                           :content-type     :json
+                           :coerce           :always
+                           :throw-exceptions false
+                           :as               :json})]
           (is (= 200 status-put))
           (is (= 200 status-patch))
           (is (= "toto" text-put))
@@ -356,12 +356,12 @@
         (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
               {status :status {{:keys [username]} :_issues} :body}
               (http/patch "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
-                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
-                         :body             (generate-string {:username "user 2"})
-                         :content-type     :json
-                         :coerce           :always
-                         :throw-exceptions false
-                         :as               :json})]
+                          {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                           :body             (generate-string {:username "user 2"})
+                           :content-type     :json
+                           :coerce           :always
+                           :throw-exceptions false
+                           :as               :json})]
           (is (= 422 status))
           (is (= username "username-should-be-unique"))))))
 
@@ -373,12 +373,12 @@
         (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
               {status :status {updated :_updated username :username} :body :as resp}
               (http/patch "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
-                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
-                         :body             (generate-string {:username "user 1"})
-                         :content-type     :json
-                         :coerce           :always
-                         :throw-exceptions false
-                         :as               :json})]
+                          {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                           :body             (generate-string {:username "user 1"})
+                           :content-type     :json
+                           :coerce           :always
+                           :throw-exceptions false
+                           :as               :json})]
           (is (= 200 status))
           (is (= username "user 1"))
           (is (instance? DateTime (f/parse (f/formatters :date-time) updated)))
@@ -387,38 +387,38 @@
 
 (deftest delete-resource
   (testing "delete - not found"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
-                   :request-method :delete
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status} (handler request)]
-      (is (= 404 status))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status} (http/delete "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaa99"
+                                            {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaa99"})}
+                                             :coerce           :always
+                                             :throw-exceptions false
+                                             :as               :json})]
+          (is (= 404 status))))))
 
   (testing "delete - unauthorized"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
-                   :request-method :delete
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status :as resp} (handler request)]
-      (is (= 403 status))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status} (http/delete "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa2"
+                                            {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                                             :coerce           :always
+                                             :throw-exceptions false
+                                             :as               :json})]
+          (is (= 403 status))))))
 
   (testing "delete - success"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :delete
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status} (handler request)]
-      (is (= 204 status))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status :as resp} (http/delete "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
+                                                     {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                                                      :coerce           :always
+                                                      :throw-exceptions false
+                                                      :as               :json})]
+          (is (= 204 status))))))
   )
