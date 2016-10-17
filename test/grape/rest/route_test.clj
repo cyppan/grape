@@ -179,7 +179,7 @@
                                :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
                                :body             (generate-string {:text "my comment"})})]
           (is (= (:status resp) 201))
-          (is (= (get-in resp [:body :text ]) "my comment"))
+          (is (= (get-in resp [:body :text]) "my comment"))
           (is (= (get-in resp [:body :user]) "aaaaaaaaaaaaaaaaaaaaaaa1"))))))
 
   (testing "create a comment specifying itself as a user should pass"
@@ -195,7 +195,7 @@
                                :query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
                                :body             (generate-string {:text "my comment" :user "aaaaaaaaaaaaaaaaaaaaaaa1"})})]
           (is (= (:status resp) 201))
-          (is (= (get-in resp [:body :text ]) "my comment"))
+          (is (= (get-in resp [:body :text]) "my comment"))
           (is (= (get-in resp [:body :user]) "aaaaaaaaaaaaaaaaaaaaaaa1"))))))
 
   (testing "create a comment specifying another user should be forbidden"
@@ -234,91 +234,92 @@
 
 (deftest update-resource
   (testing "update - validation fails - not found"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaa99")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaa99")}
-                   :request-method :put
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status} (handler request)]
-      (is (= 404 status))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status-put :status} (http/put "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaa99"
+                                             {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaa99"})}
+                                              :content-type     :json
+                                              :coerce           :always
+                                              :throw-exceptions false
+                                              :as               :json})
+              {status-patch :status} (http/patch "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaa99"
+                                                 {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaa99"})}
+                                                  :content-type     :json
+                                                  :coerce           :always
+                                                  :throw-exceptions false
+                                                  :as               :json})]
+          (is (= 404 status-put))
+          (is (= 404 status-patch))))))
 
   (testing "update - validation fails - required fields"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :put
-                   :body           {}
-                   :route-params   (:route-params match)}
-          {status :status {error :_error {:keys [username email password]} :_issues} :body} (handler request)]
-      (is (= 422 status))
-      (is (= error "validation failed"))
-      (is (= username "missing-required-key"))
-      (is (= email "missing-required-key"))
-      (is (= password "missing-required-key"))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status {error :_error {:keys [username email password]} :_issues} :body}
+              (http/put "http://localhost:8080/users/aaaaaaaaaaaaaaaaaaaaaaa1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 422 status))
+          (is (= error "validation failed"))
+          (is (= username "missing-required-key"))
+          (is (= email "missing-required-key"))
+          (is (= password "missing-required-key"))))))
 
-  ;(testing "update comment - validation fails - user not found"
-  ;  (load-fixtures)
-  ;  (let [routes ["/" (build-resources-routes deps)]
-  ;        match (match-route routes "/comments/ccccccccccccccccccccccc1")
-  ;        handler (:handler match)
-  ;        request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-  ;                 :body           {:user (ObjectId. "ffffffffffffffffffffffff")
-  ;                                  :text "toto"}
-  ;                 :request-method :put
-  ;                 :route-params   (:route-params match)}
-  ;        resp (handler request)]
-  ;    (is (= 422 (:status resp)))
-  ;    (is (= {:_error "validation failed" :_issues {:user "the resource should exist"}} (:body resp)))))
-
-  (testing "update comment - validation fails - user should be self"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/comments/ccccccccccccccccccccccc1")
-          handler (:handler match)
-          request {:auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :body           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")
-                                    :text "toto"}
-                   :request-method :put
-                   :route-params   (:route-params match)}
-          resp (handler request)]
-      (is (= 403 (:status resp)))))
+  (testing "update comment - forbidden - user provided should be self"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status :as resp}
+              (http/put "http://localhost:8080/comments/ccccccccccccccccccccccc1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:user "aaaaaaaaaaaaaaaaaaaaaaa2"
+                                                             :text "toto"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 403 status))))))
 
   (testing "update success"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          handler (:handler match)
-          request {:body           {:username "newone"
-                                    :email    "coucou@coucou.com"
-                                    :password "secret"}
-                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :put
-                   :route-params   (:route-params match)}
-          {status :status {:keys [username email]} :body} (handler request)]
-      (is (= status 200))
-      (is (= username "newone"))
-      (is (= email "coucou@coucou.com"))))
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{status :status {text :text} :body}
+              (http/put "http://localhost:8080/comments/ccccccccccccccccccccccc1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:text "toto"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 200 status))
+          (is (= "toto" text))))))
 
-  (testing "update a user should change the _updated date"
-    (load-fixtures)
-    (let [routes ["/" (build-resources-routes deps)]
-          match (match-route routes "/users/aaaaaaaaaaaaaaaaaaaaaaa1")
-          now-before-update (t/now)
-          handler (:handler match)
-          request {:body           {:username "newone"
-                                    :email    "coucou@coucou.com"
-                                    :password "secret"}
-                   :auth           {:user (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1")}
-                   :request-method :put
-                   :route-params   (:route-params match)}
-          resp (handler request)]
-      (is (instance? DateTime (get-in resp [:body :_updated])))
-      (is (< (c/to-long now-before-update) (c/to-long (get-in resp [:body :_updated]))))))
+  (testing "update succes should change the _updated date"
+    (with-test-system
+      deps
+      (fn [system]
+        (load-fixtures system)
+        (let [{{previous-updated :_updated} :body} (http/get "http://localhost:8080/comments/ccccccccccccccccccccccc1" {:as :json})
+              {status :status {updated :_updated} :body}
+              (http/put "http://localhost:8080//comments/ccccccccccccccccccccccc1"
+                        {:query-params     {"access_token" (encode-jwt system {:user "aaaaaaaaaaaaaaaaaaaaaaa1"})}
+                         :body             (generate-string {:text "toto"})
+                         :content-type     :json
+                         :coerce           :always
+                         :throw-exceptions false
+                         :as               :json})]
+          (is (= 200 status))
+          (is (instance? DateTime (f/parse (f/formatters :date-time) updated)))
+          (is (not= previous-updated updated))))))
   )
 
 (deftest partial-update-resource
