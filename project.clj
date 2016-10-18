@@ -30,11 +30,10 @@
                  [ring/ring-json "0.4.0"]
                  [clj-http "2.2.0"]
                  [com.graphql-java/graphql-java "2.1.0"]]
-  :main grape.core
-  :aot [grape.graphql.GrapeTypeRef]
+  :aot [grape.graphql.GrapeTyperef]
   :plugins [[rfkm/lein-cloverage "1.0.8"]]
   :profiles {:repl    {:main dev}
              :dev     {:dependencies [[org.clojure/tools.namespace "0.2.11"]
                                       [org.slf4j/slf4j-simple "1.7.21"]]
                        :source-paths ["dev"]}
-             :uberjar {:aot :all}})
+             :uberjar {:aot [grape.graphql.GrapeTyperef]}})

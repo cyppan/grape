@@ -1,4 +1,4 @@
-(ns grape.graphql.GrapeTypeRef
+(ns grape.graphql.GrapeTyperef
   (:gen-class
     :main false
     :extends graphql.schema.GraphQLTypeReference

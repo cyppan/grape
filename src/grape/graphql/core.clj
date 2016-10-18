@@ -181,7 +181,7 @@
                          "node"   doc})
                       _documents)}))))
 
-(defn type-ref-data-fetcher [^grape.graphql.GrapeTypeRef grape-type-ref & {:keys [many?]}]
+(defn type-ref-data-fetcher [^grape.graphql.GrapeTyperef grape-type-ref & {:keys [many?]}]
   (let [[name type resource-key field] (.state grape-type-ref)]
     (batched-data-fetcher
       (fn [{:keys [resources-registry] :as deps} request ^DataFetchingEnvironment env]
@@ -281,17 +281,17 @@
 (defn type-ref [{:keys [resources-registry] :as deps} resource v]
   (cond
     (resource-embedded? v)
-    (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
+    (grape.graphql.GrapeTyperef. (-> (get resources-registry (:resource-key v))
                                      :grape.graphql/type
                                      name)
                                  :embedded (:resource-key v) (:field v))
     (resource-join? v)
-    (grape.graphql.GrapeTypeRef. (-> (get resources-registry (:resource-key v))
+    (grape.graphql.GrapeTyperef. (-> (get resources-registry (:resource-key v))
                                      :grape.graphql/type
                                      name)
                                  :join (:resource-key v) (:field v))))
 
-(def type-ref? (partial instance? grape.graphql.GrapeTypeRef))
+(def type-ref? (partial instance? grape.graphql.GrapeTyperef))
 
 (defn resource->output-graphql-type [{:keys [resources-registry] :as deps} resource
                                      & {:keys [skip-hidden? skip-read-only?]
