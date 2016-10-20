@@ -116,19 +116,19 @@
 
 (defn walk-schema [schema key-fn value-fn
                    & {:keys [skip-hidden? skip-read-only? skip-unwrap-for transform-map transform-seq]
-                      :or   {skip-hidden?  false skip-read-only? false skip-unwrap-for (fn [path v] false)
-                             transform-map (fn [path v] v) transform-seq (fn [path v] v)}
+                      :or   {skip-hidden?  false skip-read-only? false skip-unwrap-for (fn [path parent v] false)
+                             transform-map (fn [path parent v] v) transform-seq (fn [path parent v] v)}
                       :as   args}]
-  ((fn walk [path v]
+  ((fn walk [path parent v]
      (cond
-       (or (primitive? v) (skip-unwrap-for path v))
-       (value-fn path v)
+       (or (primitive? v) (skip-unwrap-for path parent v))
+       (value-fn path parent v)
 
        (and (record? v) (seq (:schemas v)))
-       (walk path (first (:schemas v)))
+       (walk path parent (first (:schemas v)))
 
        (record? v)
-       (walk path (:schema v))
+       (walk path v (:schema v))
 
        (map? v)
        (->> v
@@ -138,14 +138,14 @@
                         [k v])))
             (map (fn [[k v]]
                    (let [k (key-fn k)]
-                     [k (walk (conj path k) v)])))
+                     [k (walk (conj path k) parent v)])))
             (into {})
-            (transform-map path))
+            (transform-map path parent))
 
        (sequential? v)
-       (let [walked (walk (conj path []) (first v))]
-         (transform-seq path [walked]))))
-    [] schema))
+       (let [walked (walk (conj path []) parent (first v))]
+         (transform-seq path parent [walked]))))
+    [] nil schema))
 
 (defn get-schema-keyseqs [schema & {:keys [skip-hidden? skip-read-only?]}]
   (let [keyseqs (volatile! #{})]

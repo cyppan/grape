@@ -9,7 +9,8 @@
             [grape.schema :refer :all]
             [grape.core :refer [read-resource read-item]]
             [grape.utils :refer [->PascalCase]]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [schema-tools.core :as st])
   (:import (graphql.schema GraphQLObjectType GraphQLSchema)
            (graphql.schema GraphQLFieldDefinition GraphQLObjectType GraphQLArgument GraphQLInterfaceType TypeResolver DataFetcher GraphQLEnumType GraphQLEnumValueDefinition GraphQLNonNull GraphQLList GraphQLTypeReference DataFetchingEnvironment GraphQLInputObjectType GraphQLInputObjectField GraphQLUnionType GraphQLScalarType Coercing)
            (graphql Scalars GraphQL)
@@ -19,7 +20,8 @@
            (org.bson.types ObjectId)
            (graphql.language StringValue IntValue)
            (org.joda.time DateTime)
-           (com.fasterxml.jackson.core JsonParseException)))
+           (com.fasterxml.jackson.core JsonParseException)
+           (clojure.lang ExceptionInfo)))
 
 (defn enum-value [name value & {:keys [description deprecation-reason]}]
   (GraphQLEnumValueDefinition. name description value deprecation-reason))
@@ -302,40 +304,55 @@
     (walk-schema
       schema
       (comp name #(if (= % :_id) :id %) schema.core/explicit-schema-key)
-      (fn [path v]
-        (cond
-          (resource-embedded? v) (if (maybe? v)
-                                   (type-ref deps resource (:schema v))
-                                   (GraphQLNonNull. (type-ref deps resource v)))
-          (resource-join? v) (type-ref deps resource v)
-          (types-map v) (if (maybe? v)
-                          (types-map (:schema v))
-                          (GraphQLNonNull. (types-map v)))))
-      :transform-map (fn [path m]
+      (fn [path parent v]
+        (let [build-type (fn [s]
+                           (cond
+                             (resource-embedded? s) (type-ref deps resource s)
+                             (resource-join? s) (type-ref deps resource s)
+                             (types-map s) (types-map s)))]
+          (if (maybe? parent)
+            (build-type (:schema v))
+            (GraphQLNonNull. (build-type v)))))
+      :transform-map (fn [path parent m]
                        (object (if (= path []) type (name (gensym type)))
                                (->> m
                                     (filter (comp identity second))
                                     (map (fn [[k v]]
                                            (cond
-                                             (and (instance? GraphQLList v) (instance? GraphQLNonNull (.getWrappedType v)) (type-ref? (.getWrappedType (.getWrappedType v))))
-                                             (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType (.getWrappedType v)) :many? true))
+                                             ;(and (instance? GraphQLList v) (instance? GraphQLNonNull (.getWrappedType v)) (type-ref? (.getWrappedType (.getWrappedType v))))
+                                             ;(field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType (.getWrappedType v)) :many? true))
                                              (and (instance? GraphQLList v) (type-ref? (.getWrappedType v)))
                                              (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType v) :many? true))
                                              (and (instance? GraphQLNonNull v) (type-ref? (.getWrappedType v)))
                                              (field k v :data-fetcher (type-ref-data-fetcher (.getWrappedType v)))
                                              (type-ref? v)
                                              (field k v :data-fetcher (type-ref-data-fetcher v))
+                                             (maybe? parent)
+                                             (field k (GraphQLNonNull. v))
                                              :else
                                              (field k v)))))))
-      :transform-seq (fn [path v]
+      :transform-seq (fn [path parent v]
                        (when (seq (filter identity v))
                          (GraphQLList. (first v))))
       :skip-hidden? true
       :skip-read-only? false
-      :skip-unwrap-for (fn [path v]
-                         (or (and (maybe? v) (primitive? (:schema v)))
-                             (resource-embedded? v)
+      :skip-unwrap-for (fn [path parent v]
+                         (or (resource-embedded? v)
                              (resource-join? v))))))
+
+(defn resolve-schema-for-join-field [{:keys [resources-registry] :as deps} {:keys [resource-key field] :as join-spec}]
+  (if-let [schema (-> (get resources-registry resource-key)
+                      :schema
+                      (st/select-keys [field])
+                      first
+                      second
+                      ((fn [s]
+                         ;; Often the joined field has the reciprocal relation-embedded, we unwrap it
+                         (if (resource-embedded? s)
+                           (:schema s)
+                           s))))]
+    schema
+    (throw (ex-info (str "[Graphql Relay schema building error] the schema cannot be found for join field ") {:type :error}))))
 
 (defn resource->input-graphql-type [{:keys [resources-registry] :as deps} resource
                                     & {:keys [skip-hidden? skip-read-only?]
@@ -347,6 +364,14 @@
       schema
       (comp name #(if (= % :_id) :id %) schema.core/explicit-schema-key)
       (fn [path v]
+        (cond
+          (resource-embedded? v) (if (maybe? v)
+                                   (:schema v)
+                                   (GraphQLNonNull. (:schema v)))
+          (resource-join? v) (type-ref deps resource v)
+          (types-map v) (if (maybe? v)
+                          (types-map (:schema v))
+                          (GraphQLNonNull. (types-map v))))
         (cond
           (types-map v) (if (maybe? v)
                           (types-map (:schema v))
