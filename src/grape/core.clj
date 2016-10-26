@@ -143,7 +143,7 @@
                        (#(pre-validate-fn deps resource request % existing))
                        (#(validate-update deps resource request % existing)) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
-                       (update store (get-in resource [:datasource :source]) (:_id payload))
+                       (update store (get-in resource [:datasource :source]) (:_id existing))
                        (#(post-update-fn deps resource request % existing)))]
       (future (post-update-async-fn deps resource request updated existing))
       updated)))
@@ -158,7 +158,7 @@
                        (#(pre-validate-fn deps resource request % existing))
                        (#(validate-partial-update deps resource request % existing)) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
-                       (partial-update store (get-in resource [:datasource :source]) (:_id payload))
+                       (partial-update store (get-in resource [:datasource :source]) (:_id existing))
                        (#(post-update-fn deps resource request % existing)))]
       (future (post-update-async-fn deps resource request updated existing))
       updated)))
