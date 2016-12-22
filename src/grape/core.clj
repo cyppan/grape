@@ -9,8 +9,8 @@
             [grape.query :refer [validate-query]]
             [cheshire.generate :refer [add-encoder encode-str remove-encoder]]
             [clj-time.format :as f]
-            [com.rpl.specter :refer :all]
             [com.rpl.specter.macros :refer :all]
+            [com.rpl.specter :refer [ALL select transform]]
             [com.climate.claypoole :as cp]
             [clojure.tools.logging :as log])
   (:import (org.joda.time DateTime)

@@ -14,7 +14,8 @@
             [clojure.tools.logging :refer [log]]
             [schema-tools.core.impl :as stc-impl]
             [schema.spec.variant :as variant]
-            [com.rpl.specter :refer :all])
+            [com.rpl.specter :refer [ALL]]
+            )
   (:import (schema.utils ValidationError)
            (schema.core Predicate Constrained Schema)
            (org.bson.types ObjectId)

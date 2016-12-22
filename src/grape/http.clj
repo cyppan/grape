@@ -5,10 +5,10 @@
             [schema.core :as s]
             [clojure.tools.logging :as log]
             [grape.schema :as gs]
-            [slingshot.slingshot :refer [try+]])
+            [slingshot.slingshot :refer [try+]]
+            [buddy.sign.jwt :as jwt])
   (:use org.httpkit.server)
-  (:import (com.auth0.jwt JWTVerifier JWTVerifyException JWTAudienceException JWTExpiredException JWTIssuerException)
-           (java.security SignatureException)))
+  (:import (java.security SignatureException)))
 
 ;; Types definitions
 
@@ -28,32 +28,17 @@
 (defn wrap-jwt-auth [handler config]
   (let [{:keys [audience secret]} config
         _ (assert (and audience secret) "missing audience or secret in jwt config")
-        verifier (JWTVerifier. secret audience)
         auth-schema (:auth-schema config)]
     (assert auth-schema "missing auth-schema key in config")
     (fn [request]
       (if-let [token (get-in request [:query-params "access_token"])]
         (try+
-          (let [claims (.verify verifier token)]
-            (->> (into {} claims)
-                 clojure.walk/keywordize-keys
-                 (#(gs/validate % auth-schema))
-                 (assoc request :auth)
-                 handler))
-          (catch [:type :validation-failed] {:keys [error]}
+          (->> (jwt/unsign token secret {:aud audience})
+               (#(gs/validate % auth-schema))
+               (assoc request :auth)
+               handler)
+          (catch [:type :validation] {:keys [error]}
             (log/warn "token decode failed for schema" error)
-            (handler request))
-          (catch SignatureException _
-            (log/warn "jwt signature exception")
-            (handler request))
-          (catch JWTVerifyException _
-            (log/warn "jwt verify failed")
-            (handler request))
-          (catch JWTAudienceException _
-            (log/warn "jwt audience invalid")
-            (handler request))
-          (catch JWTExpiredException _
-            (log/warn "jwt expired")
             (handler request)))
         (handler request)))))
 

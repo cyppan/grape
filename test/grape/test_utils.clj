@@ -1,8 +1,8 @@
 (ns grape.test-utils
   (:require [com.stuartsierra.component :as component]
             [clojure.tools.logging :as log]
-            [monger.core :as mg])
-  (:import (com.auth0.jwt JWTSigner JWTVerifier)))
+            [monger.core :as mg]
+            [buddy.sign.jwt :as jwt]))
 
 (defrecord DbFlusher [store]
   component/Lifecycle
@@ -25,6 +25,4 @@
     (component/stop-system system)))
 
 (defn encode-jwt [{{{:keys [audience secret]} :jwt} :config} claims]
-  (let [signer (JWTSigner. ^String secret)]
-    (.sign signer (clojure.walk/stringify-keys
-                    (merge claims {:aud audience})))))
+  (jwt/sign (assoc claims :aud audience) secret))

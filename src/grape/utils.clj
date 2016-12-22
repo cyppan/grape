@@ -1,7 +1,5 @@
 (ns grape.utils
-  (:require [schema.core :as s]
-            [com.rpl.specter :refer :all]
-            [com.rpl.specter.macros :refer :all]))
+  (:require [schema.core :as s]))
 
 (defn ->PascalCase [input]
   (let [formatter (cond

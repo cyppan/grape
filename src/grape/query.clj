@@ -5,8 +5,7 @@
             [grape.utils :refer :all]
             [grape.schema :refer [get-schema-keyseqs get-schema-relations]]
             [grape.hooks.core :refer :all]
-            [com.rpl.specter :refer :all]
-            [com.rpl.specter.macros :refer :all]))
+            [com.rpl.specter :refer [ALL]]))
 
 (def ? s/optional-key)
 (def StrOrKeyword (s/either s/Str s/Keyword))
