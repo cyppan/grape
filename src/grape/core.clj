@@ -21,7 +21,7 @@
                               s (f/unparse formatter d)]
                           (.writeString jsonGenerator s))))
 
-(def pool (cp/threadpool 10))
+(def pool (cp/threadpool (read-string (or (System/getenv "GRAPE_THREADPOOL_SIZE") "100"))))
 ;; TODO swith this pool into the app-system to be able to access config and close it when the app stops
 
 (declare read-resource)
