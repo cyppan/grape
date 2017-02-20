@@ -1,4 +1,4 @@
-(defproject grape "0.1.7"
+(defproject grape "0.1.8-SNAPSHOT"
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"

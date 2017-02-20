@@ -102,7 +102,7 @@
         docs* (atom (->> items
                          (map #(vector (:_id %) %))
                          (into {})))]
-    (when (and (clojure.core/count @docs*) (seq relations))
+    (when (and (pos? (clojure.core/count @docs*)) (seq relations))
       (cp/pdoseq pool
                  [[rel-key rel-query] relations]
                  (read-relation deps resource request docs* rel-key rel-query)))
