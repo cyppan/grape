@@ -9,7 +9,8 @@
             [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]
             [monger.core :as mg]
-            [schema.core :as s])
+            [schema.core :as s]
+            [clj-time.format :as f])
   (:import (org.bson.types ObjectId)))
 
 (defprotocol DataSource
@@ -30,6 +31,20 @@
 ;; # MongoDB DataSource Implementation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn find->mongo-query
+  "This is a naive mapping from the Grape query DSL to Mongodb query,
+  TODO: use the MongoDB Extended JSON format"
+  [find]
+  (clojure.walk/prewalk
+    #(cond
+       (and (string? %) (re-matches #"[a-z0-9]{24}" %))
+       (ObjectId. %)
+       (and (string? %) (re-matches #"[1-2][0-9]{3}-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.000Z" %))
+       (f/parse (f/formatters :date-time) %)
+       :default
+       %)
+    find))
+
 (defrecord MongoDataSource [;; construction parameters
                             uri
                             ;; constructed on start
@@ -40,7 +55,7 @@
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
                  find)
           {:keys [paginate? sort?] :or {paginate? true sort? true} :as opts} (:opts query)
-          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)
+          find (find->mongo-query find)
           skip-limit? (and paginate? (:limit paginate))]
       (mq/with-collection
         db source
@@ -58,7 +73,7 @@
     (let [find (if soft-delete?
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
                  find)
-          find (clojure.walk/prewalk #(if (and (string? %) (re-matches #"[a-z0-9]{24}" %)) (ObjectId. %) %) find)]
+          find (find->mongo-query find)]
       (mc/count db source find)))
   (insert [_ source document]
     (mc/insert-and-return db source document))
