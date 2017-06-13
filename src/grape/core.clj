@@ -170,7 +170,7 @@
         ((juxt :pre-delete :post-delete :post-delete-async) hooks)
         existing (read-item deps resource request {:find find})]
     (pre-delete-fn deps resource request existing)
-    (delete store (get-in resource [:datasource :source]) (:_id find) {:soft-delete? (:soft-delete resource)})
+    (delete store (get-in resource [:datasource :source]) (:_id existing) {:soft-delete? (:soft-delete resource)})
     (post-delete-fn deps resource request existing)
     (future (post-delete-async-fn deps resource request existing))
     existing))
