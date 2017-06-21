@@ -57,7 +57,7 @@
     (let [deps-store (:store *deps*)
           source (get-in *resource* [:datasource :source])]
       (zero? (store/count deps-store source
-                          {:find (merge {field {:$regex item :$options "i"}}
+                          {:find (merge {field {:$regex (str "^" item "$") :$options "i"}}
                                         (when-let [id (:_id *existing*)]
                                           {:_id {:$ne id}}))}
                           {:soft-delete? (:soft-delete *resource*)})))))
