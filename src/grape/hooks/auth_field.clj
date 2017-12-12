@@ -8,11 +8,15 @@
             auth-field? (= (:type auth-strategy) :field)
             doc-field (:doc-field auth-strategy)
             request-auth (:auth request)
-            auth-value ((:auth-field auth-strategy) request-auth)]
+            auth-value ((:auth-field auth-strategy) request-auth)
+            has-role (:has-role auth-strategy)]
         (if auth-field?
           (if (not request-auth)
             (throw (ex-info "Unauthorized" {:type :unauthorized}))
-            (on-request-auth auth-value doc-field arg))
+            (if has-role
+              (when (not (some has-role (:roles request-auth)))
+                (throw (ex-info "Unauthorized" {:type :unauthorized})))
+              (on-request-auth auth-value doc-field arg)))
           arg))
       arg)))
 
