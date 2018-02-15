@@ -178,14 +178,14 @@
         hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
         ((juxt :pre-partial-update-pre-validate :pre-partial-update-post-validate :post-partial-update :post-partial-update-async) hooks)
-        existing (read-item deps resource request {:find find})]
-    (let [updated (->> payload
-                       (#(pre-validate-fn deps resource request % existing))
-                       (#(validate-partial-update deps resource request % existing)) ;; let the validation exception throw to the caller
-                       (#(post-validate-fn deps resource request % existing))
-                       (#(flatten-payload % existing))
-                       (partial-update store (get-in resource [:datasource :source]) (:_id existing))
-                       (#(post-update-fn deps resource request % existing)))]
+        existing (read-item deps resource request {:find find})
+        hooked-payload (as-> payload p
+                             (pre-validate-fn deps resource request p existing)
+                             (validate-partial-update deps resource request p existing) ;; let the validation exception throw to the caller
+                             (post-validate-fn deps resource request p existing))
+        flat-hooked-payload (flatten-payload hooked-payload existing)]
+    (partial-update store (get-in resource [:datasource :source]) (:_id existing) flat-hooked-payload)
+    (let [updated (post-update-fn deps resource request hooked-payload existing)]
       (future (post-update-async-fn deps resource request updated existing))
       updated)))
 
