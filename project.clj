@@ -1,4 +1,4 @@
-(defproject grape "0.1.10-SNAPSHOT"
+(defproject grape "0.1.11-SNAPSHOT"
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"
@@ -22,7 +22,7 @@
                  [org.slf4j/jcl-over-slf4j "1.7.23"]
                  [com.stuartsierra/component "0.3.2"]
                  [http-kit "2.2.0"]
-                 [com.rpl/specter "0.13.2"]
+                 [com.rpl/specter "1.1.0"]
                  [com.climate/claypoole "1.1.4"]
                  [ring/ring-core "1.5.1"]
                  [jumblerg/ring.middleware.cors "1.0.1"]

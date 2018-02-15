@@ -10,7 +10,7 @@
             [cheshire.generate :refer [add-encoder encode-str remove-encoder]]
             [clj-time.format :as f]
             [com.rpl.specter.macros :refer :all]
-            [com.rpl.specter :refer [ALL select transform]]
+            [com.rpl.specter :refer [ALL select transform must]]
             [com.climate.claypoole :as cp]
             [clojure.tools.logging :as log]
             [clojure.string :as str])
@@ -45,8 +45,11 @@
                                        :_documents
                                        (map #(vector (:_id %) %))
                                        (into {}))]
-               (doseq [[doc-id _] docs]
-                 (swap! docs* update-in [doc-id] #(transform rel-path rel-docs-by-id %))))
+               (doseq [[doc-id _] docs
+                       ; ensure not polluting docs with relations paths when nil
+                       ; [:nested :key] would become [(must :nested) (must :key)]
+                       :let [path (map #(if (keyword? %) (must %) %) rel-path)]]
+                 (swap! docs* update-in [doc-id] #(transform path rel-docs-by-id %))))
              [:join false]
              (let [arity-single? (not= (last rel-path) ALL)
                    rel-ids (map first docs)
