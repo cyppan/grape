@@ -45,18 +45,6 @@
        %)
     find))
 
-(defn to-flat-update-stmt [m]
-  (letfn [(f [m prefix]
-            (cond
-              (map? m)
-              (mapcat (fn [[k v]] (f v (concat prefix [k]))) m)
-              :default
-              [prefix m]))]
-    (->> (f m nil)
-         (partition-all 2)
-         (map (fn [[k v]] [(clojure.string/join "." (map #(if (keyword? %) (name %) %) k)) v]))
-         (into {}))))
-
 (defrecord MongoDataSource [;; construction parameters
                             uri
                             ;; constructed on start
@@ -90,9 +78,8 @@
   (insert [_ source document]
     (mc/insert-and-return db source document))
   (partial-update [self source id document]
-    (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)
-          stmt (to-flat-update-stmt (dissoc document :_id))]
-      (mc/update db source {:_id coerced} {"$set" stmt})
+    (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]
+      (mc/update db source {:_id coerced} {"$set" (dissoc document :_id)})
       document))
   (update [self source id document]
     (let [coerced (if (and (string? id) (re-matches #"[a-z0-9]{24}" id)) (ObjectId. id) id)]

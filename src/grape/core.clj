@@ -12,7 +12,8 @@
             [com.rpl.specter.macros :refer :all]
             [com.rpl.specter :refer [ALL select transform]]
             [com.climate.claypoole :as cp]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [clojure.string :as str])
   (:import (org.joda.time DateTime)
            (clojure.lang ExceptionInfo)))
 
@@ -148,6 +149,27 @@
       (future (post-update-async-fn deps resource request updated existing))
       updated)))
 
+(defn- flatten-payload
+  "This is a MongoDB related trick
+  => flatten incoming structures in order to have a true partial update
+  Ex: $set {'nested_doc.key' 1 'nested_doc.key2' 2}
+  If the existing document in database contains a nil at a key in the embedded path,
+  dont flatten cause Mongo will throw"
+  [payload existing]
+  (letfn [(f [m prefix]
+            (cond
+              (and (map? m) (not (and (contains? (get-in existing (drop-last prefix)) (last prefix))
+                                      (= nil (get-in existing prefix)))))
+              (mapcat (fn [[k v]]
+                        (f v (concat prefix [k])))
+                      m)
+              :default
+              [prefix m]))]
+    (->> (f payload nil)
+         (partition-all 2)
+         (map (fn [[k v]] [(keyword (str/join "." (map #(if (keyword? %) (name %) %) k))) v]))
+         (into {}))))
+
 (defn partial-update-resource [{:keys [store hooks resources-registry] :as deps} resource request find payload]
   (let [resource (if (keyword? resource) (get resources-registry resource) resource)
         hooks (compose-hooks hooks resource)
@@ -158,6 +180,7 @@
                        (#(pre-validate-fn deps resource request % existing))
                        (#(validate-partial-update deps resource request % existing)) ;; let the validation exception throw to the caller
                        (#(post-validate-fn deps resource request % existing))
+                       (#(flatten-payload % existing))
                        (partial-update store (get-in resource [:datasource :source]) (:_id existing))
                        (#(post-update-fn deps resource request % existing)))]
       (future (post-update-async-fn deps resource request updated existing))
