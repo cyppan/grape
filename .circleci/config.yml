@@ -34,7 +34,8 @@ jobs:
       - image: circleci/clojure:lein-2.7.1
     steps:
       - checkout
-      - setup_remote_docker
+      - restore_cache:
+          key: beop-grape-{{ checksum "project.clj" }}
       - run:
           name: Build and deploy
           command: lein with-profile beop-grape deploy private
