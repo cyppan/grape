@@ -1,0 +1,54 @@
+version: 2
+
+defaults: &defaults
+  working_directory: ~/beop-grape
+
+jobs:
+  test:
+    <<: *defaults
+    docker:
+      - image: circleci/clojure:lein-2.7.1
+      - image: mongo:3.0
+    environment:
+      LEIN_ROOT: "true"
+
+    steps:
+      - checkout
+      - restore_cache:
+          key: beop-grape-{{ checksum "project.clj" }}
+      - run:
+          name: Install lein dependencies
+          command: lein deps
+      - save_cache:
+          paths:
+            - ~/.m2
+            - ~/.lein
+          key: beop-grape-{{ checksum "project.clj" }}
+      - run:
+          name: Launch test
+          command: lein test
+
+  build-deploy:
+    <<: *defaults
+    docker:
+      - image: circleci/clojure:lein-2.7.1
+    steps:
+      - checkout
+      - restore_cache:
+          key: beop-grape-{{ checksum "project.clj" }}
+      - run:
+          name: Build and deploy
+          command: lein with-profile beop-grape deploy private
+
+workflows:
+  version: 2
+  test_build_deploy:
+    jobs:
+      - test
+      - build-deploy:
+         requires:
+           - test
+         filters:
+           branches:
+             only:
+               - master

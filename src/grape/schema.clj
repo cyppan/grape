@@ -250,7 +250,10 @@
 
 (defn validate [payload schema]
   (try+
-    (stc/coerce payload schema cleve-coercion-matcher)
+    (stc/coerce
+      (st/select-schema payload schema cleve-coercion-matcher)
+      schema
+      cleve-coercion-matcher)
     (catch [:type :schema-tools.coerce/error] {:keys [error]}
       (throw (ex-info "validation failed" (map-validation-error error))))))
 

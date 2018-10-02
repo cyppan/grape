@@ -1,4 +1,4 @@
-(defproject grape "0.1.12-SNAPSHOT"
+(defproject beop-grape "0.1.12-SNAPSHOT"
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"
@@ -31,9 +31,17 @@
                  [com.graphql-java/graphql-java "2.3.0"]
                  [buddy/buddy-sign "1.4.0"]]
   :aot [grape.graphql.GrapeTyperef]
-  :plugins [[rfkm/lein-cloverage "1.0.8"]]
-  :profiles {:repl    {:main dev}
-             :dev     {:dependencies [[org.clojure/tools.namespace "0.2.11"]
-                                      [org.slf4j/slf4j-simple "1.7.23"]]
-                       :source-paths ["dev"]}
-             :uberjar {:aot [grape.graphql.GrapeTyperef]}})
+  :plugins [[rfkm/lein-cloverage "1.0.8"]
+            [s3-wagon-private "1.3.0"]]
+  :profiles {:repl       {:main dev}
+             :dev        {:dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                         [org.slf4j/slf4j-simple "1.7.23"]]
+                          :source-paths ["dev"]}
+             :uberjar    {:aot [grape.graphql.GrapeTyperef]}
+             :beop-grape {:name         "beop-grape"
+                          :group        "beop-grape"
+                          ; :java-source-paths ^:replace ["content-commons/src/java"]
+                          :jar-name     "beop-grape.jar"
+                          :plugins      [[s3-wagon-private "1.3.0"]]
+                          :repositories [["private" {:url     "s3p://beopinion-clojars/releases/"
+                                                     :no-auth true}]]}})
