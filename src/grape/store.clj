@@ -37,9 +37,9 @@
   [find]
   (clojure.walk/prewalk
     #(cond
-       (and (string? %) (re-matches #"[a-z0-9]{24}" %))
+       (and (string? %) (ObjectId/isValid %))
        (ObjectId. %)
-       (and (string? %) (re-matches #"[1-2][0-9]{3}-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.000Z" %))
+       (and (string? %) (re-matches #"[1-2][0-9]{3}-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z" %))
        (f/parse (f/formatters :date-time) %)
        :default
        %)
