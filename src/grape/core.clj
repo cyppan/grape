@@ -142,7 +142,7 @@
         hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
         ((juxt :pre-update-pre-validate :pre-update-post-validate :post-update :post-update-async) hooks)
-        existing (read-item deps resource request {:find find})]
+        existing (read-item deps resource (assoc request :grape/read-on-update true) {:find find})]
     (let [updated (->> payload
                        (#(pre-validate-fn deps resource request % existing))
                        (#(validate-update deps resource request % existing)) ;; let the validation exception throw to the caller
@@ -178,7 +178,7 @@
         hooks (compose-hooks hooks resource)
         [pre-validate-fn post-validate-fn post-update-fn post-update-async-fn]
         ((juxt :pre-partial-update-pre-validate :pre-partial-update-post-validate :post-partial-update :post-partial-update-async) hooks)
-        existing (read-item deps resource request {:find find})
+        existing (read-item deps resource (assoc request :grape/read-on-update true) {:find find})
         hooked-payload (as-> payload p
                              (pre-validate-fn deps resource request p existing)
                              (validate-partial-update deps resource request p existing) ;; let the validation exception throw to the caller
