@@ -1,4 +1,4 @@
-(defproject beop-grape "0.1.14-SNAPSHOT"
+(defproject beop-grape "0.1.15-SNAPSHOT"
   :description "The opinionated, data-first, REST, GraphQL and Falcor enabled API Clojure library"
   :url "https://github.com/cyppan/grape"
   :license {:name "Eclipse Public License"
@@ -9,7 +9,7 @@
                  [prismatic/schema "1.1.3"]
                  [prismatic/plumbing "0.5.3"]
                  [metosin/schema-tools "0.9.0"]
-                 [com.novemberain/monger "3.1.0"]
+                 [com.novemberain/monger "3.5.0"]
                  [org.clojure/core.match "0.3.0-alpha4"]
                  [ring-middleware-accept "2.0.3"]
                  [bidi "2.0.16"]
