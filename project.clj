@@ -43,5 +43,6 @@
                           ; :java-source-paths ^:replace ["content-commons/src/java"]
                           :jar-name     "beop-grape.jar"
                           :plugins      [[s3-wagon-private "1.3.2"]]
-                          :repositories [["private" {:url     "s3p://beopinion-clojars/releases/"
-                                                     :no-auth true}]]}})
+                          :repositories [["private" {:url           "s3p://beopinion-clojars/releases/"
+                                                     :sign-releases false
+                                                     :no-auth       true}]]}})
