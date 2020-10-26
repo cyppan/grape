@@ -102,7 +102,7 @@
         find (if (:soft-delete resource)
                (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
                find)
-        ids (mc/find-maps store (get-in resource [:datasource :source]) find [:_id])
+        ids (mc/find-maps (:db store) (get-in resource [:datasource :source]) find [:_id])
         count (when count?
                 (future
                   (if ids?
