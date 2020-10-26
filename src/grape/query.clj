@@ -85,8 +85,10 @@
                                           relation-q (if embedded?
                                                        (deep-merge relation-q {:opts {:count?    false
                                                                                       :paginate? false
-                                                                                      :sort?     false}})
-                                                       (deep-merge relation-q {:opts {:count? false}}))]
+                                                                                      :sort?     false
+                                                                                      :id?       false}})
+                                                       (deep-merge relation-q {:opts {:count? false
+                                                                                      :ids?   false}}))]
                                     :when (and relation-spec relation-res)]
                                 {relation-key (if recur?
                                                 (validate-query deps relation-res request relation-q {:recur? true})
