@@ -15,6 +15,7 @@
 
 (defprotocol DataSource
   (read [_ source query opts])
+  (ids [_ source query opts])
   (count [_ source query opts])
   (insert [_ source document])
   (partial-update [_ source id document])
@@ -69,6 +70,12 @@
                  (mq/partial-query (mq/skip (:skip paginate)))))
         (merge (if (and paginate? (:limit paginate))
                  (mq/partial-query (mq/limit (:limit paginate))))))))
+  (ids [_ source {:keys [find]} {:keys [soft-delete?] :as opts}]
+    (let [find (if soft-delete?
+                 (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))
+                 find)
+          find (find->mongo-query find)]
+      (mc/find-maps db source find [:_id])))
   (count [_ source {:keys [find]} {:keys [soft-delete?] :as opts}]
     (let [find (if soft-delete?
                  (if (:_deleted find) find (merge find {:_deleted {"$ne" true}}))

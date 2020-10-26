@@ -52,5 +52,6 @@
                 :page        (get-in body [:query :paginate :page])})]
     {:status (:status response)
      :body   (-> body
+                 (?> (:_ids body) (dissoc :_ids))
                  (?> (:_documents body) (clojure.set/rename-keys {:_documents :_items}))
                  (?> meta (assoc :_meta meta)))}))

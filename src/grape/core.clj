@@ -96,11 +96,14 @@
         [pre-read-fn post-read-fn] ((juxt :pre-read :post-read) (compose-hooks hooks resource))
         query (pre-read-fn deps resource request query)
         query (validate-query deps resource request query {:recur? false})
-        {:keys [relations]} query
-        count? (get-in query [:opts :count?])
+        {:keys [relations opts]} query
+        {:keys [count? ids?]} opts
+        ids (when ids? (ids store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))
         count (when count?
                 (future
-                  (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})))
+                  (if ids?
+                    (clojure.core/count ids)
+                    (count store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)}))))
         items (read store (get-in resource [:datasource :source]) query {:soft-delete? (:soft-delete resource)})
         ordered-ids (map :_id items)
         docs* (atom (->> items
@@ -111,6 +114,7 @@
                  [[rel-key rel-query] relations]
                  (read-relation deps resource request docs* rel-key rel-query)))
     (->> {:_count     (when count @count)
+          :_ids       ids
           :_query     query
           :_documents (let [docs @docs*]
                         (into [] (map #(get docs %) ordered-ids)))}
