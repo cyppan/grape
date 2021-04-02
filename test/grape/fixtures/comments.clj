@@ -6,8 +6,6 @@
             [monger.core :as mg]
             [monger.collection :as mc]
             [grape.core :refer [read-item partial-update-resource]]
-            [grape.graphql.core :refer [build-schema]]
-            [grape.graphql.route :refer [relay-handler]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [ring.middleware.cors :refer [wrap-cors]]
@@ -16,8 +14,6 @@
             [grape.rest.route :refer [build-resources-routes]])
   (:import (org.bson.types ObjectId)
            (org.joda.time DateTime)
-           (graphql GraphQL)
-           (graphql.execution.batched BatchedExecutionStrategy)
            (clojure.lang ExceptionInfo)))
 
 (def fixtures {"users"    [{:_id (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa1") :username "user 1" :email "user1@c1.com" :password "secret" :godchild (ObjectId. "aaaaaaaaaaaaaaaaaaaaaaa2")}
@@ -31,7 +27,6 @@
 
 (def UsersResource
   {:datasource         {:source "users"}
-   :grape.graphql/type 'User
    :schema             {(? :_id)       ObjectId
                         :username      (s/both
                                          (s/constrained s/Str #(re-matches #"^[A-Za-z0-9_ ]{2,25}$" %) "username-should-be-valid")
@@ -58,7 +53,6 @@
 ; read only and safe for public exposure
 (def PublicUsersResource
   {:datasource         {:source "users"}
-   :grape.graphql/type 'PublicUser
    :schema             {:_id           ObjectId
                         :username      s/Str
                         (? :comments)  (read-only [(resource-join :comments :user)])
@@ -70,7 +64,6 @@
 
 (def CommentsResource
   {:datasource         {:source "comments"}
-   :grape.graphql/type 'Comment
    :schema             {(? :_id)          ObjectId
                         (? :user)         (s/maybe (resource-embedded :public-users :user ObjectId))
                         :text             s/Str
@@ -101,7 +94,6 @@
 
 (def LikesResource
   {:datasource         {:source "likes"}
-   :grape.graphql/type 'Like
    :schema             {(? :_id) ObjectId
                         :user    (resource-embedded :public-users :user ObjectId)
                         :comment (resource-embedded :comments :comment ObjectId)}
@@ -137,7 +129,6 @@
   (fn [deps]
     (make-handler ["/" (concat
                          (build-resources-routes deps)
-                         [["relay" (partial relay-handler deps)]]
                          [[true (fn [_] {:status 404 :body {:_status 404 :_message "not found"}})]])])))
 
 (defn exception-middleware
@@ -194,63 +185,13 @@
 
 (def deps {:store              (store/new-mongo-datasource (:mongo-db config))
            :resources-registry resources-registry
-           :graphql            (GraphQL. (build-schema {:resources-registry resources-registry}) (BatchedExecutionStrategy.))
            :hooks              hooks
            :config             config
            :http-server        (new-http-server (:http-server config) app-routes app-wrapper
-                                                [:store :resources-registry :config :hooks :graphql])})
+                                                [:store :resources-registry :config :hooks])})
 
 (defn load-fixtures [{{db :db} :store}]
   (doseq [[coll docs] fixtures]
     (mc/drop db coll)
     (doseq [doc docs]
       (mc/insert db coll doc))))
-
-;; This query tests the four kinds of join capabilities
-;; DB requests are optimized and should not query more than 6 times (including one for fetching the comments list)
-;; * Single embedded resource -> comment.user + like.user (2 more)
-;; * Many embedded resources -> user.friends (1 more)
-;; * Single join resource -> user.godfather (1 more)
-;; * Many join resources -> comment.likes (1 more)
-(def CommentsListQuery
-  "query CommentsListQuery($first: Int, $sort: String, $find: String) {
-    CommentsList(first: $first, sort: $sort, find: $find) {
-      edges {
-        cursor
-        node {
-          id
-          text
-          user {
-            username
-            friends {
-              id
-              username
-            }
-            godfather {
-              id
-              username
-            }
-          }
-          likes {
-            user {
-              username
-            }
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-      }
-    }
-  }")
-
-(def CommentsQuery
-  "query CommentsQuery {
-    Comments(id:\"ccccccccccccccccccccccc1\") {
-      id
-      text
-      user {
-        username
-      }
-    }
-  }")

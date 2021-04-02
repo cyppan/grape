@@ -12,7 +12,7 @@
             [com.rpl.specter.macros :refer :all]
             [com.rpl.specter :refer [ALL select transform must]]
             [com.climate.claypoole :as cp]
-            [clojure.tools.logging :as log]
+            [taoensso.timbre :as log]
             [clojure.string :as str])
   (:import (org.joda.time DateTime)
            (clojure.lang ExceptionInfo)))

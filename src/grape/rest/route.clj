@@ -6,7 +6,7 @@
             [grape.schema :refer [validate-create validate-update validate-partial-update]]
             [plumbing.core :refer :all]
             [bidi.ring :refer (make-handler)]
-            [clojure.tools.logging :as log]
+            [taoensso.timbre :as log]
             [slingshot.slingshot :refer [try+]])
   (:import (com.fasterxml.jackson.core JsonGenerationException)))
 
@@ -92,7 +92,7 @@
                :body   {:_error  "validation failed"
                         :_issues error}}
               (catch JsonGenerationException ex
-                (log/warn "failed to json encode validation failure" ex)
+                (log/warn ex "failed to json encode validation failure")
                 {:status 422 :body {:_error (str "validation failed " error)}}))
             {:status 422 :body {:_error (:message &throw-context)}}))))))
 

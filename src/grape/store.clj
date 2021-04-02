@@ -6,11 +6,11 @@
             [monger.util :refer :all]
             monger.joda-time
             monger.json
-            [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]
             [monger.core :as mg]
             [schema.core :as s]
-            [clj-time.format :as f])
+            [clj-time.format :as f]
+            [taoensso.timbre :as log])
   (:import (org.bson.types ObjectId)))
 
 (defprotocol DataSource

@@ -17,8 +17,7 @@
     [monger.core :as mg]
     [cheshire.core :refer [generate-string parse-string]]
     [grape.store :as store]
-    [grape.hooks.core :refer [hooks]]
-    [grape.graphql.core :refer :all])
+    [grape.hooks.core :refer [hooks]])
   (:import (clojure.lang ExceptionInfo)
            (org.bson.types ObjectId)))
 

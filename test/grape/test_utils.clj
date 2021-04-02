@@ -1,6 +1,6 @@
 (ns grape.test-utils
   (:require [com.stuartsierra.component :as component]
-            [clojure.tools.logging :as log]
+            [taoensso.timbre :as log]
             [monger.core :as mg]
             [buddy.sign.jwt :as jwt]))
 

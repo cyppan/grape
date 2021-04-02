@@ -1,5 +1,5 @@
 mongodb:
-  image: tutum/mongodb:3.0
+  image: mongo:4
   ports:
     - "27017:27017"
   environment:

@@ -3,7 +3,7 @@
   and auth middleware"
   (:require [com.stuartsierra.component :as component]
             [schema.core :as s]
-            [clojure.tools.logging :as log]
+            [taoensso.timbre :as log]
             [grape.schema :as gs]
             [slingshot.slingshot :refer [try+]]
             [buddy.sign.jwt :as jwt])
@@ -38,7 +38,7 @@
                (assoc request :auth)
                handler)
           (catch [:type :validation] {:keys [error]}
-            (log/warn "token decode failed for schema" error)
+            (log/warn error "token decode failed for schema")
             (handler request)))
         (handler request)))))
 

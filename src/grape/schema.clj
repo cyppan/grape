@@ -11,8 +11,6 @@
             [monger.util :refer [object-id]]
             [clj-time.core :as t]
             [clj-time.format :as f]
-            [clojure.tools.logging :refer [log]]
-            [schema-tools.core.impl :as stc-impl]
             [schema.spec.variant :as variant]
             [com.rpl.specter :refer [ALL]]
             )
@@ -112,7 +110,7 @@
 
 (defn hidden [schema] (->Hidden schema))
 
-(def default stc-impl/default)
+(def default st/default)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utils

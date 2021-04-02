@@ -1,12 +1,33 @@
 # Grape
 
-[![Clojars Project](https://img.shields.io/clojars/v/grape.svg)](https://clojars.org/grape)
-[![CircleCI](https://circleci.com/gh/cyppan/grape.svg?style=shield)](https://circleci.com/gh/cyppan/grape)
-[![codecov](https://codecov.io/gh/cyppan/grape/branch/master/graph/badge.svg)](https://codecov.io/gh/cyppan/grape)
-[![Dependencies Status](https://jarkeeper.com/cyppan/grape/status.svg)](https://jarkeeper.com/cyppan/grape)
-
 A Clojure library designed to build data-first APIs.
-This library is a work in progress, stay tuned ;)
+
+```
+$ lein cloverage
+|-------------------------------+---------+---------|
+|                     Namespace | % Forms | % Lines |
+|-------------------------------+---------+---------|
+|                           dev |   31,43 |   57,14 |
+|                    grape.core |   62,01 |   84,52 |
+|        grape.hooks.auth-field |   91,94 |   95,31 |
+|              grape.hooks.core |  100,00 |  100,00 |
+|      grape.hooks.default-sort |   33,33 |   55,56 |
+|      grape.hooks.inject-dates |   93,33 |  100,00 |
+| grape.hooks.inject-pagination |   81,82 |   95,65 |
+|             grape.hooks.oplog |   47,12 |   58,33 |
+|  grape.hooks.restricts-fields |   86,18 |   94,74 |
+|             grape.hooks.utils |   98,66 |  100,00 |
+|                    grape.http |   57,52 |   96,23 |
+|                   grape.query |   88,71 |  100,00 |
+|             grape.rest.parser |   80,81 |   97,78 |
+|              grape.rest.route |   84,18 |   88,78 |
+|                  grape.schema |   83,73 |   89,06 |
+|                   grape.store |   73,63 |   82,81 |
+|                   grape.utils |   68,13 |   65,38 |
+|-------------------------------+---------+---------|
+|                     ALL FILES |   74,15 |   88,67 |
+|-------------------------------+---------+---------|
+```
 
 ## Features
 
@@ -46,35 +67,9 @@ using hooks on:
 * Perform complex validation involving multiple fields / collections
 * ...
 
-From that resources configurations Grape will expose on demand: 
-* A fully functional REST API (Done)
-* A Relay-compliant GraphQL Server (Nearly Done)
-* A Falcor backend (TODO)
-* A real time subscription end-point as a websocket (TODO)
-
 **Examples:**
 
 You'll find in the `examples` folder Grape showcases for:
 
 * A comment thread with users, comments and likes
 * The same project implemented with Component (lifecycle management)
-
-
-## What's Implemented for the moment
-
-* Full REST Support
-* GraphQL + Relay READ layer
-* MongoDB backend
-
-
-## Roadmap
-
-* Support different datasources by resource
-* Real time subscriptions (probably using MongoDB tailable cursors + core.async channels with websocket)
-* GraphQL + Relay write support
-* Falcor support
-
-
-## License
-
-Distributed under the Eclipse Public License 1.0 (EPL-1.0)
